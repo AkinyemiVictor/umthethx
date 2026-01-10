@@ -227,13 +227,21 @@ const acceptMap: Record<string, string> = {
   txt: "text/plain",
 };
 
+const normalizeSlug = (slug: string) => {
+  try {
+    return decodeURIComponent(slug).trim().toLowerCase();
+  } catch {
+    return slug.trim().toLowerCase();
+  }
+};
+
 export const getConverterBySlug = (slug: string) =>
-  converters.find((converter) => converter.slug === slug);
+  converters.find((converter) => converter.slug === normalizeSlug(slug));
 
 export const getConverterHref = (converter: Converter) =>
   converter.slug === "image-to-text"
     ? "/"
-    : `/converters/${converter.slug}`;
+    : `/converters/${encodeURIComponent(converter.slug)}`;
 
 export const getConverterAccept = (converter: Converter) => {
   if (converter.slug === "image-to-text") {

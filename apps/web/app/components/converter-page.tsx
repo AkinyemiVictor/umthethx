@@ -8,6 +8,7 @@ import {
   getConverterFormats,
   getConverterHref,
 } from "../lib/converters";
+import { AdSlot } from "./ad-slot";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 
@@ -140,17 +141,6 @@ const buildHowItWorks = (outputLabel: string) => [
   },
 ];
 
-function AdSlot({ label }: { label: string }) {
-  return (
-    <div
-      aria-label={label}
-      className="flex min-h-[120px] w-full items-center justify-center rounded-3xl border border-dashed border-zinc-200 bg-white/70 text-sm font-semibold text-zinc-500 shadow-sm shadow-orange-100/60 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-400 dark:shadow-none"
-    >
-      Ad space
-    </div>
-  );
-}
-
 export function ConverterPage({ converter }: { converter: Converter }) {
   const formats = getConverterFormats(converter);
   const outputLabel = converter.to.toUpperCase();
@@ -165,14 +155,14 @@ export function ConverterPage({ converter }: { converter: Converter }) {
       : `Supported format: ${formats.join(", ")}.`;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 text-zinc-900 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:text-zinc-50">
-      <div className="pointer-events-none absolute -top-32 right-[-120px] h-72 w-72 rounded-full bg-orange-200/40 blur-3xl dark:bg-orange-500/10" />
-      <div className="pointer-events-none absolute -bottom-28 left-[-80px] h-72 w-72 rounded-full bg-amber-200/40 blur-3xl dark:bg-amber-500/10" />
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-zinc-100 text-zinc-900 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:text-zinc-50">
+      <div className="pointer-events-none absolute -top-32 right-[-120px] h-72 w-72 rounded-full bg-zinc-200/50 blur-3xl dark:bg-zinc-800/40" />
+      <div className="pointer-events-none absolute -bottom-28 left-[-80px] h-72 w-72 rounded-full bg-orange-200/20 blur-3xl dark:bg-orange-500/10" />
 
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12">
         <SiteHeader converters={converters} currentSlug={converter.slug} />
 
-        <section className="rounded-3xl border border-orange-100 bg-white/80 p-6 shadow-sm shadow-orange-100/80 backdrop-blur dark:border-orange-500/20 dark:bg-zinc-950/80 dark:shadow-none">
+        <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-none">
           <div className="text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-orange-600 dark:text-orange-400">
               {converter.title}
@@ -189,7 +179,7 @@ export function ConverterPage({ converter }: { converter: Converter }) {
               <FileChip ext={converter.to} />
             </div>
           </div>
-          <div className="mt-6 rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50/50 p-6 text-center shadow-sm shadow-orange-100/60 dark:border-orange-500/30 dark:bg-orange-500/5 dark:shadow-none">
+          <div className="mt-6 rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50/70 p-6 text-center shadow-sm shadow-black/10 dark:border-zinc-700 dark:bg-zinc-900/40 dark:shadow-none">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
               <svg
                 aria-hidden="true"
@@ -238,7 +228,7 @@ export function ConverterPage({ converter }: { converter: Converter }) {
 
         <section
           id="converters"
-          className="rounded-3xl border border-orange-100 bg-white/70 p-6 shadow-sm shadow-orange-100/80 backdrop-blur dark:border-orange-500/20 dark:bg-zinc-950/80 dark:shadow-none"
+          className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-none"
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
@@ -257,11 +247,11 @@ export function ConverterPage({ converter }: { converter: Converter }) {
                   href={getConverterHref(item)}
                   aria-current={isActive ? "page" : undefined}
                   className={[
-                    "rounded-2xl border p-4 transition",
-                    "border-zinc-200 bg-white/80 hover:border-orange-200 hover:bg-orange-50",
-                    "dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10",
+                    "rounded-2xl border p-4 shadow-sm shadow-black/10 transition",
+                    "border-zinc-300 bg-white hover:border-orange-200 hover:bg-orange-50/40",
+                    "dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-none dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10",
                     isActive
-                      ? "border-orange-300 bg-orange-50 dark:border-orange-400/40 dark:bg-orange-500/10"
+                      ? "border-orange-300 bg-orange-50/60 dark:border-orange-400/60 dark:bg-orange-500/10"
                       : "",
                   ]
                     .filter(Boolean)
@@ -286,7 +276,7 @@ export function ConverterPage({ converter }: { converter: Converter }) {
 
         <AdSlot label="Advertisement slot" />
 
-        <section className="rounded-3xl border border-orange-100 bg-white/70 p-6 shadow-sm shadow-orange-100/80 backdrop-blur dark:border-orange-500/20 dark:bg-zinc-950/80 dark:shadow-none">
+        <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
               <h2 className="text-lg font-semibold">How it works</h2>
@@ -299,7 +289,7 @@ export function ConverterPage({ converter }: { converter: Converter }) {
             {howItWorks.map((step) => (
               <div
                 key={step.title}
-                className="rounded-2xl border border-zinc-200 bg-white/80 p-4 transition hover:border-orange-200 hover:bg-orange-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10"
+                className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 transition hover:border-orange-200 hover:bg-orange-50/40 dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-none dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
