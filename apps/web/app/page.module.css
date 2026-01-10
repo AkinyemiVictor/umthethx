@@ -3,8 +3,9 @@
   --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
   --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
 
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
+  --button-primary-hover: var(--brand-600);
+  --button-primary-active: var(--brand-700);
+  --button-secondary-hover: var(--brand-50);
 
   display: grid;
   grid-template-rows: 20px 1fr 20px;
@@ -22,8 +23,9 @@
     --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
     --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
 
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
+    --button-primary-hover: var(--brand-600);
+    --button-primary-active: var(--brand-700);
+    --button-secondary-hover: rgba(251, 146, 60, 0.16);
   }
 }
 
@@ -79,14 +81,24 @@
 }
 
 a.primary {
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--brand-500);
+  color: var(--brand-on);
   gap: 8px;
+}
+
+a.primary:active {
+  background: var(--button-primary-active);
+  color: var(--brand-on-active);
 }
 
 a.secondary {
   border-color: var(--gray-alpha-200);
   min-width: 180px;
+}
+
+a.primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
 button.secondary {
@@ -134,6 +146,11 @@ button.secondary {
   }
 
   a.secondary:hover {
+    background: var(--button-secondary-hover);
+    border-color: transparent;
+  }
+
+  button.secondary:hover {
     background: var(--button-secondary-hover);
     border-color: transparent;
   }

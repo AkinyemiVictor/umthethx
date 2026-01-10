@@ -1,12 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --brand-50: #fff7ed;
+  --brand-400: #fb923c;
+  --brand-500: #f97316;
+  --brand-600: #ea580c;
+  --brand-700: #c2410c;
+  --brand-950: #431407;
+  --brand-on: #0a0a0a;
+  --brand-on-active: #fff7ed;
+  --brand-ring: rgba(249, 115, 22, 0.4);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --brand-ring: rgba(251, 146, 60, 0.45);
   }
 }
 
