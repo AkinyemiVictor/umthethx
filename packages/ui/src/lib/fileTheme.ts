@@ -29,8 +29,14 @@ const extensionMap: Record<string, Family> = {
   jpg: "cyan",
   jpeg: "cyan",
   gif: "cyan",
+  jfif: "cyan",
   svg: "cyan",
   webp: "cyan",
+  avif: "cyan",
+  heic: "cyan",
+  tif: "cyan",
+  tiff: "cyan",
+  bmp: "cyan",
 };
 
 const mimeToExt: Record<string, string> = {
@@ -56,6 +62,10 @@ const mimeToExt: Record<string, string> = {
   "image/gif": "gif",
   "image/svg+xml": "svg",
   "image/webp": "webp",
+  "image/avif": "avif",
+  "image/heic": "heic",
+  "image/tiff": "tiff",
+  "image/bmp": "bmp",
 };
 
 export type FileTheme = {
