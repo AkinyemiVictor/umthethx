@@ -5,10 +5,15 @@ import {
   converters,
   footerConverters,
   getConverterAccept,
+  getConverterCategoryGroups,
   getConverterFormats,
   getConverterHref,
+  getConverterPrimaryInput,
 } from "../lib/converters";
+import { getUserPlan } from "../lib/plans";
 import { AdSlot } from "./ad-slot";
+import { ConverterCategoryIcon } from "./converter-category-icon";
+import { ConverterWorkflow } from "./converter-workflow";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 
@@ -141,30 +146,31 @@ const buildHowItWorks = (outputLabel: string) => [
   },
 ];
 
-export function ConverterPage({ converter }: { converter: Converter }) {
+export async function ConverterPage({ converter }: { converter: Converter }) {
   const formats = getConverterFormats(converter);
-  const outputLabel = converter.to.toUpperCase();
-  const inputLabel = converter.from.toUpperCase();
+  const outputLabel = converter.outputFormat.toUpperCase();
+  const inputLabel = getConverterPrimaryInput(converter).toUpperCase();
   const uploadLabel =
-    converter.slug === "image-to-text" ? "image or PDF" : inputLabel;
+    converter.slug === "image-to-text" ? "image" : inputLabel;
   const accept = getConverterAccept(converter);
   const howItWorks = buildHowItWorks(outputLabel);
+  const converterGroups = getConverterCategoryGroups(converters);
+  const plan = await getUserPlan();
+  const showAds = plan === "free";
   const formatLine =
     converter.slug === "image-to-text"
       ? `Supported formats: ${formats.join(", ")} and more.`
       : `Supported format: ${formats.join(", ")}.`;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-zinc-50 via-white to-zinc-100 text-zinc-900 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:text-zinc-50">
-      <div className="pointer-events-none absolute -top-32 right-[-120px] h-72 w-72 rounded-full bg-zinc-200/50 blur-3xl dark:bg-zinc-800/40" />
-      <div className="pointer-events-none absolute -bottom-28 left-[-80px] h-72 w-72 rounded-full bg-orange-200/20 blur-3xl dark:bg-orange-500/10" />
+    <div className="relative min-h-screen bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
 
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12">
         <SiteHeader converters={converters} currentSlug={converter.slug} />
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-none">
           <div className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-orange-600 dark:text-orange-400">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-600 dark:text-zinc-300">
               {converter.title}
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight">
@@ -174,57 +180,20 @@ export function ConverterPage({ converter }: { converter: Converter }) {
               {converter.description}
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <FileChip ext={converter.from} />
+              <FileChip ext={getConverterPrimaryInput(converter)} />
               <span className="text-zinc-400">-&gt;</span>
-              <FileChip ext={converter.to} />
+              <FileChip ext={converter.outputFormat} />
             </div>
           </div>
-          <div className="mt-6 rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50/70 p-6 text-center shadow-sm shadow-black/10 dark:border-zinc-700 dark:bg-zinc-900/40 dark:shadow-none">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 16V6" />
-                <path d="M8 10l4-4 4 4" />
-                <path d="M4 18h16" />
-              </svg>
-            </div>
-            <p className="mt-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              Drop, upload, or paste files
-            </p>
-            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-              {formatLine}
-            </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-              <label
-                htmlFor="file-upload"
-                className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-zinc-950 shadow-sm shadow-orange-500/20 transition hover:bg-orange-600 active:bg-orange-700 active:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-orange-500/10 dark:focus-visible:ring-offset-zinc-950"
-              >
-                Browse files
-              </label>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                or drag and drop
-              </span>
-            </div>
-            <input
-              id="file-upload"
-              type="file"
-              accept={accept}
-              multiple
-              className="sr-only"
-              aria-label={`Upload ${uploadLabel} files`}
-            />
-          </div>
+          <ConverterWorkflow
+            converter={converter}
+            accept={accept}
+            uploadLabel={uploadLabel}
+            formatLine={formatLine}
+          />
         </section>
 
-        <AdSlot label="Advertisement slot" />
+        {showAds ? <AdSlot label="Advertisement slot" /> : null}
 
         <section
           id="converters"
@@ -238,43 +207,63 @@ export function ConverterPage({ converter }: { converter: Converter }) {
               </p>
             </div>
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {converters.map((item) => {
-              const isActive = item.slug === converter.slug;
-              return (
-                <Link
-                  key={item.slug}
-                  href={getConverterHref(item)}
-                  aria-current={isActive ? "page" : undefined}
-                  className={[
-                    "rounded-2xl border p-4 shadow-sm shadow-black/10 transition",
-                    "border-zinc-300 bg-white hover:border-orange-200 hover:bg-orange-50/40",
-                    "dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-none dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10",
-                    isActive
-                      ? "border-orange-300 bg-orange-50/60 dark:border-orange-400/60 dark:bg-orange-500/10"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                    {item.title}
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {converterGroups.map((group) => (
+              <div
+                key={group.title}
+                className="rounded-2xl border border-zinc-300 bg-white/95 p-4 shadow-sm shadow-black/10 dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-none"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <ConverterCategoryIcon
+                      name={group.icon}
+                      className="h-4 w-4 text-[var(--brand-500)]"
+                    />
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                      {group.title}
+                    </h3>
                   </div>
-                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                    {item.description}
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {group.description}
                   </p>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    <FileChip ext={item.from} />
-                    <span className="text-zinc-400">-&gt;</span>
-                    <FileChip ext={item.to} />
-                  </div>
-                </Link>
-              );
-            })}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {group.items.map((item) => {
+                    const isActive = item.slug === converter.slug;
+                    return (
+                      <Link
+                        key={item.slug}
+                        href={getConverterHref(item)}
+                        aria-current={isActive ? "page" : undefined}
+                        className={[
+                          "rounded-xl border p-3 transition",
+                          "border-zinc-200 bg-white hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)]",
+                          "dark:border-zinc-800 dark:bg-zinc-950",
+                          isActive
+                            ? "border-[var(--brand-500)] bg-[var(--brand-50)]"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                          {item.title}
+                        </div>
+                        <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                          <FileChip ext={getConverterPrimaryInput(item)} />
+                          <span className="text-zinc-400">-&gt;</span>
+                          <FileChip ext={item.outputFormat} />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
-        <AdSlot label="Advertisement slot" />
+        {showAds ? <AdSlot label="Advertisement slot" /> : null}
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -285,14 +274,14 @@ export function ConverterPage({ converter }: { converter: Converter }) {
               </p>
             </div>
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-3">
             {howItWorks.map((step) => (
               <div
                 key={step.title}
-                className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 transition hover:border-orange-200 hover:bg-orange-50/40 dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-none dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10"
+                className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 transition hover:border-zinc-300 hover:bg-zinc-50/70 dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-none dark:hover:border-zinc-600 dark:hover:bg-zinc-900/60"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
                     {step.icon}
                   </div>
                   <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -309,9 +298,9 @@ export function ConverterPage({ converter }: { converter: Converter }) {
             {featureHighlights.map((feature) => (
               <div
                 key={feature.label}
-                className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300"
+                className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200"
               >
-                <span className="text-orange-600 dark:text-orange-300">
+                <span className="text-zinc-600 dark:text-zinc-300">
                   {feature.icon}
                 </span>
                 {feature.label}

@@ -31,6 +31,7 @@ const safelist = families.flatMap((f) => [
 ]);
 
 export default {
+  darkMode: "class",
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",

@@ -5,23 +5,23 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --brand-50: #fff7ed;
-  --brand-400: #fb923c;
-  --brand-500: #f97316;
-  --brand-600: #ea580c;
-  --brand-700: #c2410c;
-  --brand-950: #431407;
-  --brand-on: #0a0a0a;
-  --brand-on-active: #fff7ed;
-  --brand-ring: rgba(249, 115, 22, 0.4);
+  --brand-50: #eef1ff;
+  --brand-400: #6b7cff;
+  --brand-500: #0000ff;
+  --brand-600: #0000e6;
+  --brand-700: #0000cc;
+  --brand-950: #00004a;
+  --brand-on: #ffffff;
+  --brand-on-active: #ffffff;
+  --brand-ring: rgba(0, 0, 255, 0.35);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --brand-ring: rgba(251, 146, 60, 0.45);
-  }
+:root.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --brand-50: rgba(0, 0, 255, 0.18);
+  --brand-400: rgba(0, 0, 255, 0.55);
+  --brand-ring: rgba(0, 0, 255, 0.45);
 }
 
 html,
@@ -50,15 +50,13 @@ a {
   display: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+html.dark {
+  color-scheme: dark;
+}
 
-  .imgLight {
-    display: none;
-  }
-  .imgDark {
-    display: unset;
-  }
+.dark .imgLight {
+  display: none;
+}
+.dark .imgDark {
+  display: unset;
 }

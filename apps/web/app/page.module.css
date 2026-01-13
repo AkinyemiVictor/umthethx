@@ -17,16 +17,14 @@
   font-synthesis: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  .page {
-    --gray-rgb: 255, 255, 255;
-    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
-    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
+:global(.dark) .page {
+  --gray-rgb: 255, 255, 255;
+  --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
+  --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
 
-    --button-primary-hover: var(--brand-600);
-    --button-primary-active: var(--brand-700);
-    --button-secondary-hover: rgba(251, 146, 60, 0.16);
-  }
+  --button-primary-hover: var(--brand-600);
+  --button-primary-active: var(--brand-700);
+  --button-secondary-hover: var(--brand-50);
 }
 
 .main {
@@ -196,8 +194,6 @@ button.secondary {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
-  }
+:global(.dark) .logo {
+  filter: invert();
 }

@@ -1,6 +1,4 @@
-import { notFound } from "next/navigation";
-import { ConverterPage } from "../../components/converter-page";
-import { getConverterBySlug } from "../../lib/converters";
+import { permanentRedirect } from "next/navigation";
 
 type PageProps = {
   params: Promise<{
@@ -13,9 +11,5 @@ export default async function ConverterSlugPage({ params }: PageProps) {
   const slug = Array.isArray(resolvedParams.slug)
     ? resolvedParams.slug[0]
     : resolvedParams.slug;
-  const converter = getConverterBySlug(slug);
-  if (!converter) {
-    notFound();
-  }
-  return <ConverterPage converter={converter} />;
+  permanentRedirect(`/convert/${encodeURIComponent(slug)}`);
 }
