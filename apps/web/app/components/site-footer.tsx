@@ -81,7 +81,7 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
   const currentLanguage = languages[0];
 
   return (
-    <footer className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 dark:shadow-none">
+    <footer className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
       <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr_1fr_1fr]">
         <div className="space-y-3">
           <Image
@@ -90,12 +90,12 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
             width={120}
             height={38}
           />
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+          <p className="text-sm text-zinc-600 dark:text-[var(--muted)]">
             AI-powered converters for images, documents, and more.
           </p>
           <a
             href="mailto:support@umthethx.com"
-            className="text-sm font-semibold text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+            className="text-sm font-semibold text-zinc-700 hover:text-zinc-900 dark:text-[var(--muted)] dark:hover:text-[var(--foreground)]"
           >
             support@umthethx.com
           </a>
@@ -105,7 +105,7 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
                 key={link.label}
                 href={link.href}
                 aria-label={`Umthethx on ${link.label}`}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/60"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)] dark:hover:border-[var(--border-1)] dark:hover:bg-[var(--surface-3)]"
               >
                 {link.icon}
               </a>
@@ -114,10 +114,10 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
             Converters
           </h3>
-          <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
             {footerConverters.map((converter) => (
               <li key={converter.title}>{converter.title}</li>
             ))}
@@ -125,15 +125,15 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
             Quick links
           </h3>
-          <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
             {quickLinks.map((link) => (
               <li key={link.label}>
                 <a
                   href={link.href}
-                  className="transition hover:text-zinc-900 dark:hover:text-white"
+                  className="transition hover:text-zinc-900 dark:hover:text-[var(--foreground)]"
                 >
                   {link.label}
                 </a>
@@ -143,10 +143,10 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
             Language
           </h3>
-          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
+          <p className="mt-3 text-sm text-zinc-600 dark:text-[var(--muted)]">
             Change the display language for the entire experience.
           </p>
           <div className="relative mt-3">
@@ -165,7 +165,7 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
             />
             <label
               htmlFor="language-toggle"
-              className="relative z-20 flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] peer-checked:[&>svg]:rotate-180 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 [&::-webkit-details-marker]:hidden"
+              className="relative z-20 flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] peer-checked:[&>svg]:rotate-180 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] [&::-webkit-details-marker]:hidden"
             >
               <span className="flex items-center gap-2">
                 <span className="rounded-sm border border-black/10">
@@ -176,7 +176,7 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
               <svg
                 aria-hidden="true"
                 viewBox="0 0 20 20"
-                className="h-4 w-4 text-zinc-500 transition dark:text-zinc-400"
+                className="h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]"
               >
                 <path
                   d="M5 7.5 10 12.5 15 7.5"
@@ -190,14 +190,14 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
             </label>
             <div
               id="language-menu"
-              className="pointer-events-none absolute left-0 right-0 top-full z-20 mt-2 max-h-[140px] translate-y-1 overflow-y-auto rounded-xl border border-zinc-300 bg-white p-2 opacity-0 shadow-md shadow-black/10 transition peer-checked:pointer-events-auto peer-checked:translate-y-0 peer-checked:opacity-100 dark:border-zinc-700 dark:bg-zinc-950 dark:shadow-none"
+              className="pointer-events-none absolute left-0 right-0 top-full z-20 mt-2 max-h-[140px] translate-y-1 overflow-y-auto rounded-xl border border-zinc-300 bg-white p-2 opacity-0 shadow-md shadow-black/10 transition peer-checked:pointer-events-auto peer-checked:translate-y-0 peer-checked:opacity-100 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none"
             >
               <ul className="grid gap-1">
                 {languages.map((language) => (
                   <li key={language.code}>
                     <button
                       type="button"
-                      className="flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold text-zinc-700 transition hover:bg-[var(--brand-50)] hover:text-[var(--brand-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:text-zinc-200"
+                      className="flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold text-zinc-700 transition hover:bg-[var(--brand-50)] hover:text-[var(--brand-500)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:text-[var(--foreground)]"
                       aria-label={`Switch language to ${language.label}`}
                     >
                       <span className="rounded-sm border border-black/10">
@@ -213,7 +213,7 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
         </div>
       </div>
 
-      <div className="mt-6 border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+      <div className="mt-6 border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-[var(--border-2)] dark:text-[var(--muted-2)]">
         (c) 2026 Umthethx. All rights reserved.
       </div>
     </footer>

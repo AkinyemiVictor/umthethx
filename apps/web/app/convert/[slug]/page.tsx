@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { ConverterPage } from "../../components/converter-page";
-import { getConverterBySlug } from "../../lib/converters";
+import { ConverterPage } from "../../../src/components/ConverterPage";
+import { getConverterBySlug } from "../../../src/lib/converters";
 
 type PageProps = {
   params: Promise<{

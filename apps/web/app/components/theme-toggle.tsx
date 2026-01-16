@@ -41,7 +41,7 @@ export function ThemeToggle() {
       aria-checked={isDark}
       aria-label="Toggle color mode"
       onClick={handleToggle}
-      className="inline-flex items-center gap-2 text-[11px] font-semibold text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-zinc-200 dark:focus-visible:ring-offset-zinc-950 sm:text-xs"
+      className="inline-flex items-center gap-2 text-[11px] font-semibold text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:text-xs"
     >
       <span
         aria-hidden="true"
@@ -63,9 +63,7 @@ export function ThemeToggle() {
             .join(" ")}
         />
       </span>
-      <span className="whitespace-nowrap">
-        {isDark ? "Dark mode" : "Light mode"}
-      </span>
+      <span className="whitespace-nowrap">{isDark ? "Dark" : "Light"}</span>
     </button>
   );
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { JOB_TABLE } from "../../../lib/jobs";
-import { createDownloadUrl } from "../../../lib/s3";
-import { getSupabaseAdminClient } from "../../../lib/supabase/server";
+import { getAuthUser, getSupabaseServerClient } from "../../../../src/lib/auth-server";
+import { createPresignedDownloadUrl } from "../../../../src/lib/s3";
 
 export const runtime = "nodejs";
 
@@ -13,38 +12,80 @@ export async function GET(
   _request: Request,
   context: { params: Promise<Params> | Params },
 ) {
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
   const resolvedParams =
     context.params instanceof Promise ? await context.params : context.params;
   const jobId = resolvedParams.jobId;
 
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from(JOB_TABLE)
+  const supabase = getSupabaseServerClient();
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
     .select(
-      "id, converter_slug, input_key, output_key, status, plan, options, error, created_at, updated_at",
+      "id, user_id, converter_slug, status, created_at, updated_at, error, total_files, processed_files",
     )
     .eq("id", jobId)
+    .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (jobError) {
+    return NextResponse.json({ error: jobError.message }, { status: 500 });
   }
 
-  if (!data) {
+  if (!job) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
   }
 
-  let downloadUrl: string | null = null;
-  if (data.status === "success" && data.output_key) {
-    try {
-      downloadUrl = await createDownloadUrl(data.output_key);
-    } catch {
-      downloadUrl = null;
-    }
+  const { data: files, error: filesError } = await supabase
+    .from("files")
+    .select(
+      "id, job_id, kind, bucket, key, original_name, size_bytes, mime, retained, created_at",
+    )
+    .eq("job_id", jobId)
+    .eq("user_id", user.id);
+
+  if (filesError) {
+    return NextResponse.json({ error: filesError.message }, { status: 500 });
   }
 
+  const { data: artifacts, error: artifactsError } = await supabase
+    .from("job_artifacts")
+    .select(
+      "id, job_id, file_id, label, created_at, file:files(id, bucket, key, original_name, mime, size_bytes)",
+    )
+    .eq("job_id", jobId);
+
+  if (artifactsError) {
+    return NextResponse.json(
+      { error: artifactsError.message },
+      { status: 500 },
+    );
+  }
+
+  const artifactsWithUrls = await Promise.all(
+    (artifacts ?? []).map(async (artifact) => {
+      const file = Array.isArray(artifact.file) ? artifact.file[0] : artifact.file;
+      if (!file?.key) {
+        return { ...artifact, downloadUrl: null };
+      }
+      try {
+        const { downloadUrl } = await createPresignedDownloadUrl({
+          key: file.key,
+          bucket: file.bucket,
+        });
+        return { ...artifact, downloadUrl };
+      } catch {
+        return { ...artifact, downloadUrl: null };
+      }
+    }),
+  );
+
   return NextResponse.json({
-    job: data,
-    downloadUrl,
+    job,
+    files: files ?? [],
+    artifacts: artifactsWithUrls,
   });
 }

@@ -1,18 +1,64 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from "react";
+import { useSearchParams } from "next/navigation";
 import { FileChip } from "@repo/ui/file-chip";
 import { JobStatus } from "@repo/ui/job-status";
 import { getConverterPrimaryInput, type Converter } from "../lib/converters";
-import { languages } from "../lib/languages";
 
 type WorkflowStatus = "queued" | "running" | "success" | "error";
+type ApiJobStatus = "queued" | "processing" | "completed" | "failed";
+type UploadStatus = "pending" | "uploading" | "uploaded" | "failed";
+
+type UploadItem = {
+  id: string;
+  file: File;
+  status: UploadStatus;
+  error?: string;
+};
+
+type JobSummary = {
+  id: string;
+  status: ApiJobStatus;
+  processed_files?: number | null;
+  total_files?: number | null;
+  error?: string | null;
+};
+
+type JobArtifact = {
+  id: string;
+  label?: string | null;
+  downloadUrl?: string | null;
+  file?: {
+    original_name?: string | null;
+    key?: string | null;
+  } | null;
+};
 
 type ConverterWorkflowProps = {
   converter: Converter;
   accept: string;
   uploadLabel: string;
   formatLine: string;
+};
+
+const mapJobStatus = (status: ApiJobStatus | WorkflowStatus): WorkflowStatus => {
+  switch (status) {
+    case "processing":
+      return "running";
+    case "completed":
+      return "success";
+    case "failed":
+      return "error";
+    default:
+      return status;
+  }
 };
 
 const formatBytes = (size: number) => {
@@ -23,6 +69,9 @@ const formatBytes = (size: number) => {
   return `${mb.toFixed(1)} MB`;
 };
 
+const buildUploadId = (file: File) =>
+  `${file.name}-${file.size}-${file.lastModified}`;
+
 export function ConverterWorkflow({
   converter,
   accept,
@@ -31,29 +80,55 @@ export function ConverterWorkflow({
 }: ConverterWorkflowProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const primaryInput = getConverterPrimaryInput(converter);
-  const [files, setFiles] = useState<File[]>([]);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [status, setStatus] = useState<WorkflowStatus | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [artifacts, setArtifacts] = useState<JobArtifact[]>([]);
+  const [job, setJob] = useState<JobSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [outputName, setOutputName] = useState("");
-  const [ocrLanguage, setOcrLanguage] = useState(languages[0]?.code ?? "en");
+  const searchParams = useSearchParams();
+  const initialJobId = searchParams?.get("jobId");
 
   const resetJobState = () => {
     setStatus(null);
     setJobId(null);
-    setDownloadUrl(null);
+    setArtifacts([]);
+    setJob(null);
     setError(null);
   };
 
   const handleFiles = (selected: File[]) => {
-    setFiles(selected);
+    const nextUploads = selected.map((file) => ({
+      id: buildUploadId(file),
+      file,
+      status: "pending" as UploadStatus,
+    }));
+    setUploads(nextUploads);
     resetJobState();
     if (inputRef.current) {
       inputRef.current.value = "";
     }
+  };
+
+  const updateUpload = (id: string, updates: Partial<UploadItem>) => {
+    setUploads((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, ...updates } : item,
+      ),
+    );
+  };
+
+  const handleRemoveFile = (index: number, isBusy: boolean) => {
+    if (isBusy) return;
+    setUploads((current) => {
+      const next = current.filter((_, idx) => idx !== index);
+      if (next.length === 0) {
+        resetJobState();
+      }
+      return next;
+    });
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -71,62 +146,80 @@ export function ConverterWorkflow({
   };
 
   const handleSubmit = async () => {
-    if (!files.length) {
+    if (!uploads.length) {
       setError("Select a file to convert.");
       return;
     }
     setIsSubmitting(true);
     setError(null);
-    setDownloadUrl(null);
+    setArtifacts([]);
+    setJob(null);
+    setStatus(null);
+    setJobId(null);
 
-    const file = files[0];
+    const collectedUploads: Array<{
+      fileId: string;
+      key: string;
+      bucket: string;
+      originalName: string;
+      mime: string;
+      sizeBytes: number;
+    }> = [];
 
     try {
-      const presignRes = await fetch("/api/uploads/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          contentType: file.type || "application/octet-stream",
-        }),
-      });
+      for (const item of uploads) {
+        updateUpload(item.id, { status: "uploading", error: undefined });
+        const file = item.file;
+        const presignRes = await fetch("/api/uploads/sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: file.name,
+            mime: file.type || "application/octet-stream",
+            sizeBytes: file.size,
+          }),
+        });
 
-      if (!presignRes.ok) {
-        const payload = await presignRes.json().catch(() => ({}));
-        throw new Error(payload.error || "Failed to get upload URL.");
+        if (!presignRes.ok) {
+          const payload = await presignRes.json().catch(() => ({}));
+          throw new Error(payload.error || "Failed to get upload URL.");
+        }
+
+        const presign = (await presignRes.json()) as {
+          uploadUrl: string;
+          key: string;
+          bucket: string;
+          expiresIn: number;
+          fileId: string;
+        };
+
+        const uploadRes = await fetch(presign.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+          body: file,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Upload failed. Try again.");
+        }
+
+        updateUpload(item.id, { status: "uploaded" });
+        collectedUploads.push({
+          fileId: presign.fileId,
+          key: presign.key,
+          bucket: presign.bucket,
+          originalName: file.name,
+          mime: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+        });
       }
 
-      const presign = (await presignRes.json()) as {
-        url: string;
-        key: string;
-        headers?: Record<string, string>;
-      };
-
-      const uploadRes = await fetch(presign.url, {
-        method: "PUT",
-        headers: presign.headers ?? {},
-        body: file,
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error("Upload failed. Try again.");
-      }
-
-      const options: Record<string, unknown> = {};
-      if (outputName.trim()) {
-        options.outputName = outputName.trim();
-      }
-      if (converter.slug === "image-to-text") {
-        options.ocrLanguage = ocrLanguage;
-      }
-
-      const enqueueRes = await fetch("/api/jobs/enqueue", {
+      const enqueueRes = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           converterSlug: converter.slug,
-          input: { key: presign.key, fileName: file.name },
-          options,
+          uploads: collectedUploads,
         }),
       });
 
@@ -138,14 +231,35 @@ export function ConverterWorkflow({
       const enqueuePayload = (await enqueueRes.json()) as { jobId: string };
       setJobId(enqueuePayload.jobId);
       setStatus("queued");
+      setJob({
+        id: enqueuePayload.jobId,
+        status: "queued",
+        processed_files: 0,
+        total_files: collectedUploads.length,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Conversion failed.";
       setError(message);
       setStatus("error");
+      setUploads((current) =>
+        current.map((item) =>
+          item.status === "uploading"
+            ? { ...item, status: "failed", error: message }
+            : item,
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialJobId || jobId || uploads.length > 0) {
+      return;
+    }
+    setJobId(initialJobId);
+    setStatus("queued");
+  }, [initialJobId, jobId, uploads.length]);
 
   useEffect(() => {
     if (!jobId || status === "success" || status === "error") {
@@ -161,13 +275,15 @@ export function ConverterWorkflow({
           return;
         }
         const payload = (await res.json()) as {
-          job: { status: WorkflowStatus };
-          downloadUrl?: string | null;
+          job: JobSummary;
+          artifacts?: JobArtifact[];
         };
         if (cancelled) return;
-        setStatus(payload.job.status);
-        if (payload.downloadUrl) {
-          setDownloadUrl(payload.downloadUrl);
+        setJob(payload.job);
+        setStatus(mapJobStatus(payload.job.status));
+        setArtifacts(payload.artifacts ?? []);
+        if (payload.job.status === "failed" && payload.job.error) {
+          setError(payload.job.error);
         }
       } catch {
         if (!cancelled) {
@@ -177,12 +293,19 @@ export function ConverterWorkflow({
     };
 
     poll();
-    const interval = setInterval(poll, 2000);
+    const interval = setInterval(poll, 1500);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
   }, [jobId, status]);
+
+  const isBusy =
+    isSubmitting || job?.status === "queued" || job?.status === "processing";
+  const processedCount = job?.processed_files ?? 0;
+  const totalCount = job?.total_files ?? uploads.length;
+  const progressPercent =
+    totalCount > 0 ? Math.round((processedCount / totalCount) * 100) : 0;
 
   return (
     <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -206,13 +329,13 @@ export function ConverterWorkflow({
           className={[
             "rounded-2xl border-2 border-dashed p-6 text-center transition",
             "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",
-            "dark:border-zinc-700 dark:bg-zinc-900/40 dark:shadow-none",
+            "dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none",
             isDragging ? "border-[var(--brand-500)] bg-[var(--brand-50)]" : "",
           ]
             .filter(Boolean)
             .join(" ")}
         >
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
             <svg
               aria-hidden="true"
               viewBox="0 0 24 24"
@@ -228,16 +351,16 @@ export function ConverterWorkflow({
               <path d="M4 18h16" />
             </svg>
           </div>
-          <p className="mt-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          <p className="mt-4 text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
             Drop, upload, or paste files
           </p>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
             {formatLine}
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-zinc-950"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
               onClick={(event) => {
                 event.stopPropagation();
                 inputRef.current?.click();
@@ -245,7 +368,7 @@ export function ConverterWorkflow({
             >
               Browse files
             </button>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
               or drag and drop
             </span>
           </div>
@@ -262,93 +385,96 @@ export function ConverterWorkflow({
         </div>
 
         <div className="mt-4 space-y-2">
-          {files.length === 0 ? (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          {uploads.length === 0 ? (
+            <p className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
               No files selected yet.
             </p>
           ) : (
-            <>
-              {files.length > 1 && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Multiple files selected. The first file will be converted.
-                </p>
-              )}
-              <ul className="space-y-2">
-                {files.map((file) => (
+            <ul className="space-y-2">
+              {uploads.map((item, index) => {
+                const file = item.file;
+                const isProcessed =
+                  job?.status === "processing" || job?.status === "completed"
+                    ? processedCount > index
+                    : false;
+                const uploadLabel =
+                  item.status === "uploading"
+                    ? "Uploading"
+                    : item.status === "uploaded"
+                      ? "Uploaded"
+                      : item.status === "failed"
+                        ? "Failed"
+                        : "Ready";
+                const statusLabel =
+                  item.status === "failed"
+                    ? "Failed"
+                    : job?.status === "processing" || job?.status === "completed"
+                      ? isProcessed
+                        ? "Processed"
+                        : "Queued"
+                      : uploadLabel;
+                return (
                   <li
-                    key={`${file.name}-${file.size}`}
-                    className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm shadow-black/5 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300"
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)]"
                   >
-                    <span className="truncate font-semibold text-zinc-900 dark:text-zinc-50">
+                    <span className="min-w-0 truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
                       {file.name}
                     </span>
-                    <span className="ml-3 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <span className="ml-3 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-[var(--muted-2)]">
                       <FileChip ext={file.name.split(".").pop()} />
                       {formatBytes(file.size)}
+                      <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:border-[var(--border-2)] dark:text-[var(--muted-2)]">
+                        {statusLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(index, isBusy)}
+                        aria-label={`Remove ${file.name}`}
+                        disabled={isBusy}
+                        className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
+                      >
+                        Remove
+                      </button>
                     </span>
                   </li>
-                ))}
-              </ul>
-            </>
+                );
+              })}
+            </ul>
           )}
         </div>
       </div>
 
       <div className="space-y-4">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            Options
-          </div>
-          <div className="mt-3 space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
-            <label className="block space-y-1">
-              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                Output name (optional)
-              </span>
-              <input
-                type="text"
-                value={outputName}
-                onChange={(event) => setOutputName(event.target.value)}
-                placeholder={`my-file.${converter.outputFormat}`}
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus-visible:border-[var(--brand-400)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200"
-              />
-            </label>
-            {converter.slug === "image-to-text" && (
-              <label className="block space-y-1">
-                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                  OCR language
-                </span>
-                <select
-                  value={ocrLanguage}
-                  onChange={(event) => setOcrLanguage(event.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 focus-visible:border-[var(--brand-400)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200"
-                >
-                  {languages.map((language) => (
-                    <option key={language.code} value={language.code}>
-                      {language.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
+          <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
             Status
           </div>
           <div className="mt-3 flex items-center gap-3">
             {status ? (
               <JobStatus ext={converter.outputFormat} state={status} />
             ) : (
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
                 Waiting for upload.
               </span>
             )}
             {jobId && (
-              <span className="text-xs text-zinc-400">Job #{jobId}</span>
+              <span className="text-xs text-zinc-400 dark:text-[var(--muted-2)]">Job #{jobId}</span>
             )}
           </div>
+          {job ? (
+            <div className="mt-3 space-y-2">
+              <div className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+                {processedCount}/{totalCount} files processed
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-[var(--surface-3)]">
+                <div
+                  className="h-full rounded-full bg-[var(--brand-500)] transition-all"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
           {error && (
             <p className="mt-2 text-xs text-red-600 dark:text-red-400">
               {error}
@@ -357,35 +483,59 @@ export function ConverterWorkflow({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting || files.length === 0}
-            className="mt-4 inline-flex items-center justify-center rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-zinc-950"
+            disabled={isBusy || uploads.length === 0}
+            className="mt-4 inline-flex items-center justify-center rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
           >
-            {isSubmitting ? "Uploading..." : "Convert now"}
+            {isSubmitting ? "Uploading..." : isBusy ? "Processing..." : "Convert now"}
           </button>
         </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-zinc-800 dark:bg-zinc-950 dark:shadow-none">
-          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
+          <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
             Results
           </div>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
             Your converted file will appear here once processing completes.
           </p>
-          <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
             <FileChip ext={primaryInput} />
             <span className="text-zinc-400">-&gt;</span>
             <FileChip ext={converter.outputFormat} />
           </div>
-          {downloadUrl && (
-            <a
-              href={downloadUrl}
-              className="mt-4 inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-4 py-2 text-xs font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Download results
-            </a>
-          )}
+          {artifacts.length ? (
+            <ul className="mt-4 space-y-2 text-xs">
+              {artifacts.map((artifact) => {
+                const label =
+                  artifact.label ||
+                  artifact.file?.original_name ||
+                  "Artifact";
+                return (
+                  <li
+                    key={artifact.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
+                  >
+                    <span className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                      {label}
+                    </span>
+                    {artifact.downloadUrl ? (
+                      <a
+                        href={artifact.downloadUrl}
+                        className="inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Download
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-zinc-400 dark:text-[var(--muted-2)]">
+                        Processing
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
       </div>
     </div>

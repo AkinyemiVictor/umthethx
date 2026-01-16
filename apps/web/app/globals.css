@@ -17,11 +17,21 @@
 }
 
 :root.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --brand-50: rgba(0, 0, 255, 0.18);
-  --brand-400: rgba(0, 0, 255, 0.55);
-  --brand-ring: rgba(0, 0, 255, 0.45);
+  --background: #0b1a36;
+  --foreground: #e7edf9;
+  --surface-1: #0f2345;
+  --surface-2: #13284f;
+  --surface-3: #162e5a;
+  --border-1: #1f3b66;
+  --border-2: #2a4b7a;
+  --muted: #9fb0d3;
+  --muted-2: #7d8fb3;
+  --brand-50: rgba(74, 108, 255, 0.18);
+  --brand-400: rgba(74, 108, 255, 0.55);
+  --brand-500: #4a6cff;
+  --brand-600: #3c5df0;
+  --brand-700: #2f4ce0;
+  --brand-ring: rgba(74, 108, 255, 0.45);
 }
 
 html,
