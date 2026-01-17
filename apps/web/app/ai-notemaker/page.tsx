@@ -2,7 +2,6 @@ import { AdSlot } from "../components/ad-slot";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { converters, footerConverters } from "../lib/converters";
-import { getUserPlan } from "../lib/plans";
 
 const howItWorks = [
   {
@@ -20,9 +19,6 @@ const howItWorks = [
 ];
 
 export default async function AiNoteMakerPage() {
-  const plan = await getUserPlan();
-  const showAds = plan === "free";
-
   return (
     <div className="relative min-h-screen bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
 
@@ -103,7 +99,7 @@ export default async function AiNoteMakerPage() {
           </div>
         </section>
 
-        {showAds ? <AdSlot plan={plan} label="Advertisement slot" /> : null}
+        <AdSlot label="Advertisement slot" />
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -131,7 +127,7 @@ export default async function AiNoteMakerPage() {
           </div>
         </section>
 
-        {showAds ? <AdSlot plan={plan} label="Advertisement slot" /> : null}
+        <AdSlot label="Advertisement slot" />
 
         <SiteFooter footerConverters={footerConverters} />
       </div>

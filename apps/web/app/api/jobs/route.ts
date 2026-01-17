@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getConverterBySlug } from "../../../src/lib/converters";
-import { getAuthUser, getSupabaseServerClient } from "../../../src/lib/auth-server";
 import { getQueue } from "../../../src/lib/queue";
+import { env } from "../../lib/env";
+import { getSupabaseAdminClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -22,10 +23,7 @@ type CreateJobRequest = {
 const MAX_BATCH_SIZE = 20;
 
 export async function POST(request: Request) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const userId = env.get("PUBLIC_USER_ID");
 
   let body: CreateJobRequest;
   try {
@@ -96,11 +94,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseAdminClient();
   const { data: jobRow, error: jobError } = await supabase
     .from("jobs")
     .insert({
-      user_id: user.id,
+      user_id: userId,
       converter_slug: converter.slug,
       status: "queued",
       total_files: uploads.length,
@@ -120,7 +118,7 @@ export async function POST(request: Request) {
     .from("files")
     .update({ job_id: jobRow.id })
     .in("id", uploadIds)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .select("id");
 
   if (filesError) {

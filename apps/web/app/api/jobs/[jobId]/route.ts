@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAuthUser, getSupabaseServerClient } from "../../../../src/lib/auth-server";
 import { createPresignedDownloadUrl } from "../../../../src/lib/s3";
+import { env } from "../../../lib/env";
+import { getSupabaseAdminClient } from "../../../lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -12,23 +13,20 @@ export async function GET(
   _request: Request,
   context: { params: Promise<Params> | Params },
 ) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const userId = env.get("PUBLIC_USER_ID");
 
   const resolvedParams =
     context.params instanceof Promise ? await context.params : context.params;
   const jobId = resolvedParams.jobId;
 
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseAdminClient();
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .select(
       "id, user_id, converter_slug, status, created_at, updated_at, error, total_files, processed_files",
     )
     .eq("id", jobId)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (jobError) {
@@ -45,7 +43,7 @@ export async function GET(
       "id, job_id, kind, bucket, key, original_name, size_bytes, mime, retained, created_at",
     )
     .eq("job_id", jobId)
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   if (filesError) {
     return NextResponse.json({ error: filesError.message }, { status: 500 });

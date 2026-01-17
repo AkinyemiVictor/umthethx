@@ -1,5 +1,4 @@
 import { FileChip } from "@repo/ui/file-chip";
-import { AdSlot } from "../src/components/AdSlot";
 import { ConverterGrid } from "../src/components/ConverterGrid";
 import {
   converters,
@@ -10,9 +9,9 @@ import {
   getConverterPrimaryInput,
 } from "../src/lib/converters";
 import { ConverterWorkflow } from "./components/converter-workflow";
+import { AdSlot } from "./components/ad-slot";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeader } from "./components/site-header";
-import { getUserPlan } from "./lib/plans";
 
 const howItWorksSteps = [
   {
@@ -39,9 +38,6 @@ export default async function Home() {
   const accept = getConverterAccept(converter);
   const uploadLabel = "image";
   const formatLine = `Supported formats: ${formats.join(", ")} and more.`;
-  const plan = await getUserPlan();
-  const showAds = plan === "free";
-
   return (
     <div className="relative min-h-screen bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12">
@@ -74,9 +70,7 @@ export default async function Home() {
           </section>
         </div>
 
-        {showAds ? (
-          <AdSlot plan={plan} slot="home-inline" className="min-h-[140px]" />
-        ) : null}
+        <AdSlot slot="home-inline" className="min-h-[140px]" />
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">

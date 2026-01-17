@@ -7,7 +7,6 @@ import {
   getConverterFormats,
   getConverterPrimaryInput,
 } from "../lib/converters";
-import { getUserPlan } from "../lib/plans";
 import { AdSlot } from "./ad-slot";
 import { ConverterWorkflow } from "./converter-workflow";
 import { SiteFooter } from "./site-footer";
@@ -151,8 +150,6 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
     converter.slug === "image-to-text" ? "image" : inputLabel;
   const accept = getConverterAccept(converter);
   const howItWorks = buildHowItWorks(outputLabel);
-  const plan = await getUserPlan();
-  const showAds = plan === "free";
   const formatLine =
     converter.slug === "image-to-text"
       ? `Supported formats: ${formats.join(", ")} and more.`
@@ -189,7 +186,7 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
           />
         </section>
 
-        {showAds ? <AdSlot plan={plan} label="Advertisement slot" /> : null}
+        <AdSlot label="Advertisement slot" />
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -237,7 +234,7 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
 
         <ConverterGrid converters={converters} currentSlug={converter.slug} />
 
-        {showAds ? <AdSlot plan={plan} label="Advertisement slot" /> : null}
+        <AdSlot label="Advertisement slot" />
 
         <SiteFooter footerConverters={footerConverters} />
       </div>

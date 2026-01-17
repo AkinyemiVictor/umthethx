@@ -1,13 +1,13 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { converters } from "../../../../src/lib/converters";
-import { getAuthUser, getSupabaseServerClient } from "../../../../src/lib/auth-server";
 import {
   createPresignedUploadUrl,
   createUploadKey,
   getS3Bucket,
 } from "../../../../src/lib/s3";
-import { getUserPlan } from "../../../lib/plans";
+import { env } from "../../../lib/env";
+import { getSupabaseAdminClient } from "../../../lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -17,8 +17,7 @@ type SignRequest = {
   sizeBytes?: number;
 };
 
-const MAX_FREE_BYTES = 25 * 1024 * 1024;
-const MAX_PRO_BYTES = 200 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const { allowedMimeTypes, wildcardPrefixes } = converters.reduce(
   (acc, converter) => {
@@ -50,10 +49,7 @@ const isMimeAllowed = (mime: string) => {
 };
 
 export async function POST(request: Request) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const userId = env.get("PUBLIC_USER_ID");
 
   let body: SignRequest;
   try {
@@ -90,17 +86,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const plan = await getUserPlan(user.id);
-  const maxBytes = plan === "pro" ? MAX_PRO_BYTES : MAX_FREE_BYTES;
-
-  if (sizeBytes > maxBytes) {
+  if (sizeBytes > MAX_UPLOAD_BYTES) {
     return NextResponse.json(
-      { error: `File exceeds the ${plan} plan limit.` },
+      { error: "File exceeds the upload size limit." },
       { status: 413 },
     );
   }
 
-  const key = createUploadKey(user.id, filename);
+  const key = createUploadKey(userId, filename);
   const { uploadUrl, expiresIn } = await createPresignedUploadUrl({
     key,
     mime,
@@ -108,10 +101,10 @@ export async function POST(request: Request) {
   const bucket = getS3Bucket();
   const fileId = randomUUID();
 
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseAdminClient();
   const { error: insertError } = await supabase.from("files").insert({
     id: fileId,
-    user_id: user.id,
+    user_id: userId,
     job_id: null,
     kind: "upload",
     bucket,
