@@ -1,7 +1,17 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { converters } from "../../../../src/lib/converters";
+<<<<<<< HEAD
 import { buildUploadKey, signPutObject } from "../../../../src/lib/s3";
+=======
+import {
+  createPresignedUploadUrl,
+  createUploadKey,
+  getS3Bucket,
+} from "../../../../src/lib/s3";
+import { env } from "../../../lib/env";
+import { getSupabaseAdminClient } from "../../../lib/supabase/server";
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
 export const runtime = "nodejs";
 
@@ -13,8 +23,12 @@ type SignRequest = {
   jobId?: string;
 };
 
+<<<<<<< HEAD
 const MAX_FILENAME_LENGTH = 180;
 const MAX_BYTES = 200 * 1024 * 1024;
+=======
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
 const { allowedMimeTypes, wildcardPrefixes } = converters.reduce(
   (acc, converter) => {
@@ -46,6 +60,12 @@ const isMimeAllowed = (mime: string) => {
 };
 
 export async function POST(request: Request) {
+<<<<<<< HEAD
+=======
+  const userId = env.get("PUBLIC_USER_ID");
+
+  let body: SignRequest;
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
   try {
     let body: SignRequest;
     try {
@@ -128,4 +148,76 @@ export async function POST(request: Request) {
       error instanceof Error ? error.message : "Failed to create upload URL.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+<<<<<<< HEAD
+=======
+
+  const filename = body.filename?.trim();
+  const mime = body.mime?.trim();
+  const sizeBytes = Number(body.sizeBytes);
+
+  if (!filename || !mime || !Number.isFinite(sizeBytes)) {
+    return NextResponse.json(
+      { error: "filename, mime, and sizeBytes are required." },
+      { status: 400 },
+    );
+  }
+
+  if (sizeBytes <= 0) {
+    return NextResponse.json(
+      { error: "sizeBytes must be greater than 0." },
+      { status: 400 },
+    );
+  }
+
+  if (!isMimeAllowed(mime)) {
+    return NextResponse.json(
+      { error: "File type is not supported." },
+      { status: 415 },
+    );
+  }
+
+  if (sizeBytes > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "File exceeds the upload size limit." },
+      { status: 413 },
+    );
+  }
+
+  const key = createUploadKey(userId, filename);
+  const { uploadUrl, expiresIn } = await createPresignedUploadUrl({
+    key,
+    mime,
+  });
+  const bucket = getS3Bucket();
+  const fileId = randomUUID();
+
+  const supabase = getSupabaseAdminClient();
+  const { error: insertError } = await supabase.from("files").insert({
+    id: fileId,
+    user_id: userId,
+    job_id: null,
+    kind: "upload",
+    bucket,
+    key,
+    original_name: filename,
+    size_bytes: Math.trunc(sizeBytes),
+    mime,
+    retained: false,
+  });
+
+  if (insertError) {
+    return NextResponse.json(
+      { error: insertError.message },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({
+    uploadUrl,
+    key,
+    bucket,
+    expiresIn,
+    fileId,
+  });
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 }

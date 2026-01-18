@@ -9,8 +9,12 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { FileChip } from "@repo/ui/file-chip";
+<<<<<<< HEAD
 import type { Converter } from "../lib/converters";
 import { useTranslations } from "./language-provider";
+=======
+import { type Converter } from "../lib/converters";
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
 type WorkflowStatus = "queued" | "running" | "success" | "error";
 type ApiJobStatus = "queued" | "processing" | "completed" | "failed";
@@ -101,7 +105,10 @@ export function ConverterWorkflow({
   formatLine,
 }: ConverterWorkflowProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+<<<<<<< HEAD
   const t = useTranslations();
+=======
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [status, setStatus] = useState<WorkflowStatus | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -152,6 +159,12 @@ export function ConverterWorkflow({
         item.id === id ? { ...item, ...updates } : item,
       ),
     );
+  };
+
+  const handleClearAll = () => {
+    if (isBusy) return;
+    setUploads([]);
+    resetJobState();
   };
 
   const handleRemoveFile = (index: number, isBusy: boolean) => {
@@ -349,6 +362,7 @@ export function ConverterWorkflow({
 
   const isBusy =
     isSubmitting || job?.status === "queued" || job?.status === "processing";
+<<<<<<< HEAD
   const showSidePanel = uploads.length > 0;
 
   return (
@@ -356,10 +370,42 @@ export function ConverterWorkflow({
       className={[
         "mt-6 grid gap-6",
         showSidePanel ? "lg:grid-cols-2" : "",
+=======
+  const processedCount = job?.processed_files ?? 0;
+  const totalCount = job?.total_files ?? uploads.length;
+  const hasResults = artifacts.length > 0;
+  const hasUploads = uploads.length > 0;
+
+  const dropzone = (
+    <div
+      role="button"
+      tabIndex={0}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      onClick={() => inputRef.current?.click()}
+      className={[
+        "flex max-h-[320px] min-h-[320px] flex-col justify-center rounded-2xl border-2 border-dashed p-6 text-center transition",
+        "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",
+        "dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none",
+        isDragging
+          ? "border-[var(--brand-500)] bg-zinc-100/80 dark:bg-[var(--surface-3)]"
+          : "",
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
       ]
         .filter(Boolean)
         .join(" ")}
     >
+<<<<<<< HEAD
       <div className="min-w-0">
         <div
           role="button"
@@ -509,16 +555,141 @@ export function ConverterWorkflow({
               </ul>
             )}
           </div>
+=======
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          className="h-6 w-6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 16V6" />
+          <path d="M8 10l4-4 4 4" />
+          <path d="M4 18h16" />
+        </svg>
+      </div>
+      <p className="mt-4 text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+        Drop, upload, or paste files
+      </p>
+      <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+        {formatLine}
+      </p>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
+          onClick={(event) => {
+            event.stopPropagation();
+            inputRef.current?.click();
+          }}
+        >
+          Browse files
+        </button>
+        <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+          or drag and drop
+        </span>
+      </div>
+      <input
+        ref={inputRef}
+        id="file-upload"
+        type="file"
+        accept={accept}
+        multiple
+        className="sr-only"
+        aria-label={`Upload ${uploadLabel} files`}
+        onChange={handleFileChange}
+      />
+    </div>
+  );
+
+  if (hasResults) {
+    return (
+      <div className="mt-6">
+        <div className="flex max-h-[320px] min-h-[320px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                Results
+              </div>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+                Download your converted files.
+              </p>
+            </div>
+            {isBusy ? (
+              <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+                Processing {processedCount}/{totalCount}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex min-h-0 flex-1 flex-col">
+            <ul className="flex-1 space-y-2 overflow-y-auto pr-1 text-xs">
+              {artifacts.map((artifact) => {
+                const label =
+                  artifact.label || artifact.file?.original_name || "Artifact";
+                return (
+                  <li
+                    key={artifact.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
+                  >
+                    <span className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                      {label}
+                    </span>
+                    {artifact.downloadUrl ? (
+                      <a
+                        href={artifact.downloadUrl}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--brand-400)] text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Download ${label}`}
+                      >
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 4v9" />
+                          <path d="m8 10 4 4 4-4" />
+                          <path d="M4 20h16" />
+                        </svg>
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-zinc-400 dark:text-[var(--muted-2)]">
+                        Processing
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
           {error && (
             <p className="mt-3 text-xs text-red-600 dark:text-red-400">
               {error}
             </p>
           )}
+<<<<<<< HEAD
           <div className="mt-4 flex items-center justify-between gap-3">
+=======
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
             <button
               type="button"
               onClick={handleClearAll}
               disabled={isBusy}
+<<<<<<< HEAD
               className="inline-flex items-center justify-center rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
             >
               {t("workflow.clearAll")}
@@ -539,6 +710,123 @@ export function ConverterWorkflow({
             </button>
           </div>
         </div>
+=======
+              className="inline-flex items-center justify-center rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[var(--border-2)] dark:text-[var(--muted)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
+            >
+              Clear all
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={[
+        "mt-6 grid items-stretch gap-6",
+        hasUploads ? "lg:grid-cols-[1.1fr_0.9fr]" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="h-full">{dropzone}</div>
+
+      {hasUploads ? (
+        <div className="flex max-h-[320px] min-h-[320px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                Uploads
+              </div>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+                Files ready for conversion will appear here.
+              </p>
+            </div>
+            {isBusy ? (
+              <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+                Processing {processedCount}/{totalCount}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex min-h-0 flex-1 flex-col">
+            {hasUploads ? (
+              <ul className="flex-1 space-y-2 overflow-y-auto pr-1 text-xs">
+                {uploads.map((item, index) => {
+                  const file = item.file;
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)]"
+                    >
+                      <div className="min-w-0">
+                        <span className="block truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                          {file.name}
+                        </span>
+                        <span className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-[var(--muted-2)]">
+                          {formatBytes(file.size)}
+                          <FileChip ext={file.name.split(".").pop()} />
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(index, isBusy)}
+                        aria-label={`Remove ${file.name}`}
+                        disabled={isBusy}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-200 text-zinc-400 transition hover:border-zinc-300 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M6 6l12 12" />
+                          <path d="M18 6L6 18" />
+                        </svg>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+                No files selected yet.
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <p className="mt-3 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={isBusy || !hasUploads}
+              className="inline-flex items-center justify-center rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[var(--border-2)] dark:text-[var(--muted)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
+            >
+              Clear all
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isBusy || !hasUploads}
+              className="inline-flex items-center justify-center rounded-full bg-[var(--brand-500)] px-5 py-2 text-xs font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
+            >
+              {isSubmitting ? "Uploading..." : isBusy ? "Processing..." : "Convert"}
+            </button>
+          </div>
+        </div>
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
       ) : null}
     </div>
   );

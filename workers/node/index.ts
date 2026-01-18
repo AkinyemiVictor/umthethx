@@ -1,8 +1,14 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
 import { Worker } from "bullmq";
 import { randomUUID } from "crypto";
+import pdfParse from "pdf-parse";
+import { Readable } from "stream";
 import { QUEUE_NAME, getRedisConnection } from "../../apps/web/src/lib/queue";
+import {
+  detectTextFromImageBytes,
+  detectTextFromPdfS3,
+} from "../../apps/web/src/lib/textract";
 
 type EnvKey =
   | "SUPABASE_URL"
@@ -21,6 +27,11 @@ const requireEnv = (key: EnvKey) => {
   return value;
 };
 
+const awsRegion = requireEnv("AWS_REGION");
+const awsAccessKeyId = requireEnv("AWS_ACCESS_KEY_ID");
+const awsSecretAccessKey = requireEnv("AWS_SECRET_ACCESS_KEY");
+const bucket = requireEnv("S3_BUCKET");
+
 const supabase = createClient(
   requireEnv("SUPABASE_URL"),
   requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
@@ -30,13 +41,12 @@ const supabase = createClient(
 );
 
 const s3 = new S3Client({
-  region: requireEnv("AWS_REGION"),
+  region: awsRegion,
   credentials: {
-    accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
-    secretAccessKey: requireEnv("AWS_SECRET_ACCESS_KEY"),
+    accessKeyId: awsAccessKeyId,
+    secretAccessKey: awsSecretAccessKey,
   },
 });
-const bucket = requireEnv("S3_BUCKET");
 
 const sanitizeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -65,10 +75,77 @@ const createArtifactKey = (options: {
 
 const updateJobStatus = async (jobId: string, status: string, error?: string) => {
   const payload: Record<string, unknown> = { status };
-  if (error) {
+  if (typeof error !== "undefined") {
     payload.error = error;
   }
   await supabase.from("jobs").update(payload).eq("id", jobId);
+};
+
+const streamToBuffer = async (body: unknown): Promise<Buffer> => {
+  if (!body) {
+    throw new Error("Missing S3 body.");
+  }
+  if (body instanceof Uint8Array) {
+    return Buffer.from(body);
+  }
+  if (typeof body === "string") {
+    return Buffer.from(body);
+  }
+  if (body instanceof Readable) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+  if (typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === "function") {
+    const arrayBuffer = await (body as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+  if (typeof (body as { transformToByteArray?: () => Promise<Uint8Array> }).transformToByteArray === "function") {
+    const bytes = await (body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
+    return Buffer.from(bytes);
+  }
+  throw new Error("Unsupported S3 body type.");
+};
+
+const getObjectBuffer = async (bucketName: string, key: string) => {
+  const response = await s3.send(
+    new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    }),
+  );
+  return streamToBuffer(response.Body);
+};
+
+const extractTextFromPdfBytes = async (buffer: Buffer) => {
+  const parsed = await pdfParse(buffer);
+  return parsed.text?.trim() ?? "";
+};
+
+const extractTextForFile = async (options: {
+  bucket: string;
+  key: string;
+  mime?: string | null;
+}) => {
+  const mime = options.mime?.toLowerCase() ?? "";
+  if (mime.includes("pdf") || options.key.toLowerCase().endsWith(".pdf")) {
+    const bytes = await getObjectBuffer(options.bucket, options.key);
+    let text = "";
+    try {
+      text = await extractTextFromPdfBytes(bytes);
+    } catch {
+      text = "";
+    }
+    if (text.length >= 50) {
+      return text;
+    }
+    return detectTextFromPdfS3(options.bucket, options.key);
+  }
+
+  const bytes = await getObjectBuffer(options.bucket, options.key);
+  return detectTextFromImageBytes(bytes);
 };
 
 const incrementProcessed = async (jobId: string) => {
@@ -150,33 +227,54 @@ const handleJob = async (jobId: string) => {
     throw new Error(filesError.message);
   }
 
-  await updateJobStatus(jobId, "processing");
+  await updateJobStatus(jobId, "processing", null);
 
   const uploadFiles = files ?? [];
+  let successCount = 0;
+  const errors: string[] = [];
+
   for (const file of uploadFiles) {
-    const slug = job.converter_slug;
-    const mime = file.mime?.toLowerCase() ?? "";
-    let content: string | null = null;
+    try {
+      if (!file.key) {
+        throw new Error("Missing S3 key.");
+      }
+      const text = await extractTextForFile({
+        bucket: file.bucket ?? bucket,
+        key: file.key,
+        mime: file.mime,
+      });
+      if (!text || text.trim().length === 0) {
+        throw new Error("No text detected.");
+      }
 
-    if (slug === "image-to-text" || slug === "jpeg-to-text" || slug === "png-to-text") {
-      content = `OCR pending: file ${file.original_name ?? file.key}`;
-    } else if (slug === "pdf-to-text" && mime.startsWith("application/pdf")) {
-      content = "PDF text extraction pending";
-    }
-
-    if (content) {
       await createArtifact({
         userId: job.user_id,
         jobId,
         originalName: file.original_name ?? "output.txt",
-        content,
+        content: text,
       });
+      successCount += 1;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Extraction failed.";
+      errors.push(`${file.original_name ?? file.key}: ${message}`);
+    } finally {
+      await incrementProcessed(jobId);
     }
-
-    await incrementProcessed(jobId);
   }
 
-  await updateJobStatus(jobId, "completed");
+  if (successCount === 0) {
+    await updateJobStatus(
+      jobId,
+      "failed",
+      errors.length ? errors.join(" | ") : "All files failed.",
+    );
+    return;
+  }
+
+  const warning =
+    errors.length > 0 ? `Some files failed: ${errors.join(" | ")}` : null;
+  await updateJobStatus(jobId, "completed", warning);
 };
 
 const connection = getRedisConnection();

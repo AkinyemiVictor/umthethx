@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
+<<<<<<< HEAD
 import { converters, getConverterBySlug } from "../../../src/lib/converters";
 import {
   createJobRecord,
   getJobRecord,
   type JobInput,
 } from "../../../src/lib/job-store";
+=======
+import { getConverterBySlug } from "../../../src/lib/converters";
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 import { getQueue } from "../../../src/lib/queue";
+import { env } from "../../lib/env";
+import { getSupabaseAdminClient } from "../../lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -84,6 +90,11 @@ const isInputAccepted = (converterSlug: string, input: JobInput) => {
 };
 
 export async function POST(request: Request) {
+<<<<<<< HEAD
+=======
+  const userId = env.get("PUBLIC_USER_ID");
+
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
   let body: CreateJobRequest;
   try {
     body = (await request.json()) as CreateJobRequest;
@@ -176,6 +187,7 @@ export async function POST(request: Request) {
     );
   }
 
+<<<<<<< HEAD
   await createJobRecord({
     id: jobId,
     status: "queued",
@@ -187,6 +199,66 @@ export async function POST(request: Request) {
     })),
     outputs: [],
   });
+=======
+  const invalidUpload = uploads.find(
+    (upload) =>
+      !upload.key?.trim() ||
+      !upload.bucket?.trim() ||
+      !upload.originalName?.trim() ||
+      !upload.mime?.trim() ||
+      !Number.isFinite(upload.sizeBytes),
+  );
+
+  if (invalidUpload) {
+    return NextResponse.json(
+      { error: "Each upload must include key, bucket, originalName, mime, and sizeBytes." },
+      { status: 400 },
+    );
+  }
+
+  const supabase = getSupabaseAdminClient();
+  const { data: jobRow, error: jobError } = await supabase
+    .from("jobs")
+    .insert({
+      user_id: userId,
+      converter_slug: converter.slug,
+      status: "queued",
+      total_files: uploads.length,
+      processed_files: 0,
+    })
+    .select("id")
+    .single();
+
+  if (jobError || !jobRow?.id) {
+    return NextResponse.json(
+      { error: jobError?.message ?? "Failed to create job." },
+      { status: 500 },
+    );
+  }
+
+  const { data: updatedFiles, error: filesError } = await supabase
+    .from("files")
+    .update({ job_id: jobRow.id })
+    .in("id", uploadIds)
+    .eq("user_id", userId)
+    .select("id");
+
+  if (filesError) {
+    await supabase.from("jobs").delete().eq("id", jobRow.id);
+    return NextResponse.json(
+      { error: filesError.message },
+      { status: 500 },
+    );
+  }
+
+  if ((updatedFiles?.length ?? 0) !== uploads.length) {
+    await supabase.from("jobs").delete().eq("id", jobRow.id);
+    return NextResponse.json(
+      { error: "One or more uploads could not be attached to the job." },
+      { status: 400 },
+    );
+  }
+>>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
   try {
     const queue = getQueue();

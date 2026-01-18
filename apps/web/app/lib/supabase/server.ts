@@ -9,12 +9,6 @@ const baseOptions = {
   },
 };
 
-export const getSupabaseServerClient = (): SupabaseClient => {
-  const url = env.get("SUPABASE_URL");
-  const anonKey = env.get("SUPABASE_ANON_KEY");
-  return createClient(url, anonKey, baseOptions);
-};
-
 export const getSupabaseAdminClient = (): SupabaseClient => {
   const url = env.get("SUPABASE_URL");
   const serviceRoleKey = env.get("SUPABASE_SERVICE_ROLE_KEY");
