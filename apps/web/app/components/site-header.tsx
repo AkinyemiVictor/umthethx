@@ -1,11 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { FileChip } from "@repo/ui/file-chip";
 import type { Converter } from "../lib/converters";
 import { ConverterCategoryIcon } from "./converter-category-icon";
 import { ThemeToggle } from "./theme-toggle";
-import { getCurrentLanguage } from "../lib/i18n";
-import { getTranslator } from "../lib/translations";
+import { useTranslations } from "./language-provider";
 import {
   getConverterCategoryGroups,
   getConverterHref,
@@ -17,11 +18,10 @@ type SiteHeaderProps = {
   currentSlug?: string;
 };
 
-export async function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
+export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleId = "converter-toggle";
   const converterGroups = getConverterCategoryGroups(converters);
-  const lang = await getCurrentLanguage();
-  const t = getTranslator(lang);
+  const t = useTranslations();
 
   return (
     <div className="flex flex-col gap-4">

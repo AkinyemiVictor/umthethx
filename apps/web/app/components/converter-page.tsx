@@ -7,12 +7,8 @@ import {
   getConverterFormats,
   getConverterPrimaryInput,
 } from "../lib/converters";
-<<<<<<< HEAD
 import { getCurrentLanguage } from "../lib/i18n";
 import { getTranslator } from "../lib/translations";
-import { getUserPlan } from "../lib/plans";
-=======
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 import { AdSlot } from "./ad-slot";
 import { ConverterWorkflow } from "./converter-workflow";
 import { SiteFooter } from "./site-footer";
@@ -28,7 +24,6 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
   const uploadLabel =
     converter.slug === "image-to-text" ? "image" : inputLabel;
   const accept = getConverterAccept(converter);
-<<<<<<< HEAD
   const howItWorks = [
     {
       title: t("converterPage.steps.drop.title"),
@@ -158,11 +153,7 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
       ),
     },
   ];
-  const plan = await getUserPlan();
-  const showAds = plan === "free";
-=======
-  const howItWorks = buildHowItWorks(outputLabel);
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
+  const showAds = true;
   const formatLine =
     converter.slug === "image-to-text"
       ? t("converterPage.supportedFormatsPlural", {
@@ -174,7 +165,6 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
 
   return (
     <div className="relative min-h-screen bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
-
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12">
         <SiteHeader converters={converters} currentSlug={converter.slug} />
 
@@ -203,13 +193,9 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
           />
         </section>
 
-<<<<<<< HEAD
         {showAds ? (
-          <AdSlot plan={plan} label={t("ads.label")} text={t("ads.text")} />
+          <AdSlot label={t("ads.label")} text={t("ads.text")} />
         ) : null}
-=======
-        <AdSlot label="Advertisement slot" />
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -264,13 +250,9 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
           description={t("grid.description")}
         />
 
-<<<<<<< HEAD
         {showAds ? (
-          <AdSlot plan={plan} label={t("ads.label")} text={t("ads.text")} />
+          <AdSlot label={t("ads.label")} text={t("ads.text")} />
         ) : null}
-=======
-        <AdSlot label="Advertisement slot" />
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
         <SiteFooter footerConverters={footerConverters} />
       </div>

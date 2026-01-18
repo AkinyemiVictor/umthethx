@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-import { AdSlot } from "../src/components/AdSlot";
-=======
-import { FileChip } from "@repo/ui/file-chip";
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 import { ConverterGrid } from "../src/components/ConverterGrid";
 import {
   converters,
@@ -15,27 +10,8 @@ import { ConverterWorkflow } from "./components/converter-workflow";
 import { AdSlot } from "./components/ad-slot";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeader } from "./components/site-header";
-<<<<<<< HEAD
-import { getUserPlan } from "./lib/plans";
 import { getCurrentLanguage } from "./lib/i18n";
 import { getTranslator } from "./lib/translations";
-=======
-
-const howItWorksSteps = [
-  {
-    title: "Upload your file",
-    description: "Drop or browse to select your document or image.",
-  },
-  {
-    title: "Convert instantly",
-    description: "We extract and convert with AI-powered processing.",
-  },
-  {
-    title: "Download results",
-    description: "Save or share your converted file immediately.",
-  },
-];
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
 export default async function Home() {
   const converter = getConverterBySlug("image-to-text");
@@ -48,12 +24,10 @@ export default async function Home() {
   const formats = getConverterFormats(converter);
   const accept = getConverterAccept(converter);
   const uploadLabel = "image";
-<<<<<<< HEAD
   const formatLine = t("converterPage.supportedFormatsPlural", {
     formats: formats.join(", "),
   });
-  const plan = await getUserPlan();
-  const showAds = plan === "free";
+  const showAds = true;
   const howItWorksSteps = [
     {
       title: t("home.steps.upload.title"),
@@ -68,10 +42,6 @@ export default async function Home() {
       description: t("home.steps.download.description"),
     },
   ];
-
-=======
-  const formatLine = `Supported formats: ${formats.join(", ")} and more.`;
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
   return (
     <div className="relative min-h-screen bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12">
@@ -99,15 +69,11 @@ export default async function Home() {
           </section>
         </div>
 
-<<<<<<< HEAD
         {showAds ? (
-          <AdSlot plan={plan} slot="home-inline" className="min-h-[140px]">
+          <AdSlot slot="home-inline" className="min-h-[140px]">
             {t("ads.text")}
           </AdSlot>
         ) : null}
-=======
-        <AdSlot slot="home-inline" className="min-h-[140px]" />
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -148,7 +114,7 @@ export default async function Home() {
         />
 
         {showAds ? (
-          <AdSlot plan={plan} slot="home-footer" className="min-h-[140px]">
+          <AdSlot slot="home-footer" className="min-h-[140px]">
             {t("ads.text")}
           </AdSlot>
         ) : null}

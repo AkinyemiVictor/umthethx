@@ -1,8 +1,10 @@
+"use client";
+
 import Image from "next/image";
 import type { Converter } from "../lib/converters";
-import { getCurrentLanguage } from "../lib/i18n";
-import { getTranslator, type TranslationKey } from "../lib/translations";
+import { type TranslationKey } from "../lib/translations";
 import { LanguageMenu } from "./language-menu";
+import { useTranslations } from "./language-provider";
 
 type SiteFooterProps = {
   footerConverters: Converter[];
@@ -79,9 +81,8 @@ const socialLinks = [
   },
 ];
 
-export async function SiteFooter({ footerConverters }: SiteFooterProps) {
-  const lang = await getCurrentLanguage();
-  const t = getTranslator(lang);
+export function SiteFooter({ footerConverters }: SiteFooterProps) {
+  const t = useTranslations();
 
   return (
     <footer className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">

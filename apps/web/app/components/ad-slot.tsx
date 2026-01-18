@@ -2,31 +2,26 @@ import type { ReactNode } from "react";
 
 type AdSlotProps = {
   label?: string;
-<<<<<<< HEAD
-  text?: string;
-};
-
-export function AdSlot({
-  plan,
-  label = "Advertisement slot",
-  text = "Ad space",
-}: AdSlotProps) {
-  if (plan !== "free") {
-    return null;
-  }
-=======
   slot?: string;
   className?: string;
+  text?: string;
   children?: ReactNode;
+  plan?: "free" | "pro";
 };
 
 export function AdSlot({
   label = "Advertisement slot",
   slot,
   className,
+  text,
   children,
+  plan,
 }: AdSlotProps) {
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
+  if (plan && plan !== "free") {
+    return null;
+  }
+
+  const content = children ?? text ?? "Ad";
 
   return (
     <div
@@ -39,11 +34,7 @@ export function AdSlot({
         .filter(Boolean)
         .join(" ")}
     >
-<<<<<<< HEAD
-      {text}
-=======
-      {children ?? "Ad"}
->>>>>>> 6ef1f89173997d7443971dba4d0659a74eb5c9d9
+      {content}
     </div>
   );
 }
