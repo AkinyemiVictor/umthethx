@@ -56,7 +56,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Missing file id." }, { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: file, error: fileError } = await supabase
     .from("files")
     .select("id, job_id, key, bucket")

@@ -18,7 +18,7 @@ export async function getUserPlan(userId?: string): Promise<UserPlan> {
       return "free";
     }
 
-    const supabase = getSupabaseServerClient();
+    const supabase = await getSupabaseServerClient();
     const { data, error } = await supabase
       .from("profiles")
       .select("plan")

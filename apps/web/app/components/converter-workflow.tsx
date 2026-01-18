@@ -9,8 +9,8 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { FileChip } from "@repo/ui/file-chip";
-import { JobStatus } from "@repo/ui/job-status";
-import { getConverterPrimaryInput, type Converter } from "../lib/converters";
+import type { Converter } from "../lib/converters";
+import { useTranslations } from "./language-provider";
 
 type WorkflowStatus = "queued" | "running" | "success" | "error";
 type ApiJobStatus = "queued" | "processing" | "completed" | "failed";
@@ -26,19 +26,12 @@ type UploadItem = {
 type JobSummary = {
   id: string;
   status: ApiJobStatus;
-  processed_files?: number | null;
-  total_files?: number | null;
   error?: string | null;
 };
 
-type JobArtifact = {
-  id: string;
-  label?: string | null;
+type JobOutput = {
+  filename: string;
   downloadUrl?: string | null;
-  file?: {
-    original_name?: string | null;
-    key?: string | null;
-  } | null;
 };
 
 type ConverterWorkflowProps = {
@@ -69,8 +62,37 @@ const formatBytes = (size: number) => {
   return `${mb.toFixed(1)} MB`;
 };
 
+const mimeByExtension: Record<string, string> = {
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  csv: "text/csv",
+  txt: "text/plain",
+  html: "text/html",
+  json: "application/json",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  avif: "image/avif",
+  heic: "image/heic",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  bmp: "image/bmp",
+};
+
+const getMimeFromFilename = (fileName: string) => {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  return ext ? mimeByExtension[ext] : undefined;
+};
+
 const buildUploadId = (file: File) =>
   `${file.name}-${file.size}-${file.lastModified}`;
+const MAX_UPLOADS = 5;
 
 export function ConverterWorkflow({
   converter,
@@ -79,11 +101,11 @@ export function ConverterWorkflow({
   formatLine,
 }: ConverterWorkflowProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const primaryInput = getConverterPrimaryInput(converter);
+  const t = useTranslations();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [status, setStatus] = useState<WorkflowStatus | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [artifacts, setArtifacts] = useState<JobArtifact[]>([]);
+  const [outputs, setOutputs] = useState<JobOutput[]>([]);
   const [job, setJob] = useState<JobSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,19 +116,31 @@ export function ConverterWorkflow({
   const resetJobState = () => {
     setStatus(null);
     setJobId(null);
-    setArtifacts([]);
+    setOutputs([]);
     setJob(null);
     setError(null);
   };
 
   const handleFiles = (selected: File[]) => {
-    const nextUploads = selected.map((file) => ({
-      id: buildUploadId(file),
-      file,
-      status: "pending" as UploadStatus,
-    }));
-    setUploads(nextUploads);
+    if (!selected.length) return;
     resetJobState();
+    setUploads((current) => {
+      const remaining = Math.max(MAX_UPLOADS - current.length, 0);
+      if (remaining === 0) {
+        setError(t("workflow.fileLimit", { count: MAX_UPLOADS }));
+        return current;
+      }
+      const limited = selected.slice(0, remaining);
+      if (selected.length > remaining) {
+        setError(t("workflow.fileLimit", { count: MAX_UPLOADS }));
+      }
+      const nextUploads = limited.map((file) => ({
+        id: buildUploadId(file),
+        file,
+        status: "pending" as UploadStatus,
+      }));
+      return [...current, ...nextUploads];
+    });
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -131,6 +165,12 @@ export function ConverterWorkflow({
     });
   };
 
+  const handleClearAll = () => {
+    if (isBusy) return;
+    setUploads([]);
+    resetJobState();
+  };
+
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.target.files ?? []);
     handleFiles(selected);
@@ -147,71 +187,73 @@ export function ConverterWorkflow({
 
   const handleSubmit = async () => {
     if (!uploads.length) {
-      setError("Select a file to convert.");
+      setError(t("workflow.selectFile"));
       return;
     }
     setIsSubmitting(true);
     setError(null);
-    setArtifacts([]);
+    setOutputs([]);
     setJob(null);
     setStatus(null);
     setJobId(null);
 
-    const collectedUploads: Array<{
-      fileId: string;
+    const collectedInputs: Array<{
       key: string;
-      bucket: string;
-      originalName: string;
-      mime: string;
-      sizeBytes: number;
+      filename: string;
+      contentType: string;
     }> = [];
+    let activeJobId: string | null = null;
 
     try {
       for (const item of uploads) {
         updateUpload(item.id, { status: "uploading", error: undefined });
         const file = item.file;
+        const contentType =
+          file.type || getMimeFromFilename(file.name) || "application/octet-stream";
         const presignRes = await fetch("/api/uploads/sign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             filename: file.name,
-            mime: file.type || "application/octet-stream",
+            contentType,
             sizeBytes: file.size,
+            jobId: activeJobId,
           }),
         });
 
         if (!presignRes.ok) {
           const payload = await presignRes.json().catch(() => ({}));
-          throw new Error(payload.error || "Failed to get upload URL.");
+          throw new Error(payload.error || t("workflow.uploadUrlError"));
         }
 
         const presign = (await presignRes.json()) as {
+          jobId: string;
           uploadUrl: string;
           key: string;
-          bucket: string;
           expiresIn: number;
-          fileId: string;
         };
+        activeJobId = presign.jobId;
 
         const uploadRes = await fetch(presign.uploadUrl, {
           method: "PUT",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
+          headers: { "Content-Type": contentType },
           body: file,
         });
 
         if (!uploadRes.ok) {
-          throw new Error("Upload failed. Try again.");
+          throw new Error(t("workflow.uploadFailed"));
         }
 
         updateUpload(item.id, { status: "uploaded" });
-        collectedUploads.push({
-          fileId: presign.fileId,
+        collectedInputs.push({
           key: presign.key,
-          bucket: presign.bucket,
-          originalName: file.name,
-          mime: file.type || "application/octet-stream",
-          sizeBytes: file.size,
+          filename: file.name,
+          contentType,
         });
+      }
+
+      if (!activeJobId) {
+        throw new Error(t("workflow.uploadUrlError"));
       }
 
       const enqueueRes = await fetch("/api/jobs", {
@@ -219,13 +261,14 @@ export function ConverterWorkflow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           converterSlug: converter.slug,
-          uploads: collectedUploads,
+          jobId: activeJobId,
+          inputs: collectedInputs,
         }),
       });
 
       if (!enqueueRes.ok) {
         const payload = await enqueueRes.json().catch(() => ({}));
-        throw new Error(payload.error || "Failed to start conversion.");
+        throw new Error(payload.error || t("workflow.startFailed"));
       }
 
       const enqueuePayload = (await enqueueRes.json()) as { jobId: string };
@@ -234,11 +277,10 @@ export function ConverterWorkflow({
       setJob({
         id: enqueuePayload.jobId,
         status: "queued",
-        processed_files: 0,
-        total_files: collectedUploads.length,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Conversion failed.";
+      const message =
+        err instanceof Error ? err.message : t("workflow.conversionFailed");
       setError(message);
       setStatus("error");
       setUploads((current) =>
@@ -275,19 +317,24 @@ export function ConverterWorkflow({
           return;
         }
         const payload = (await res.json()) as {
-          job: JobSummary;
-          artifacts?: JobArtifact[];
+          status: ApiJobStatus;
+          outputs?: JobOutput[];
+          error?: string | null;
         };
         if (cancelled) return;
-        setJob(payload.job);
-        setStatus(mapJobStatus(payload.job.status));
-        setArtifacts(payload.artifacts ?? []);
-        if (payload.job.status === "failed" && payload.job.error) {
-          setError(payload.job.error);
+        setJob({
+          id: jobId,
+          status: payload.status,
+          error: payload.error ?? null,
+        });
+        setStatus(mapJobStatus(payload.status));
+        setOutputs(payload.outputs ?? []);
+        if (payload.status === "failed" && payload.error) {
+          setError(payload.error);
         }
       } catch {
         if (!cancelled) {
-          setError("Unable to fetch job status.");
+          setError(t("workflow.fetchStatusFailed"));
         }
       }
     };
@@ -302,14 +349,18 @@ export function ConverterWorkflow({
 
   const isBusy =
     isSubmitting || job?.status === "queued" || job?.status === "processing";
-  const processedCount = job?.processed_files ?? 0;
-  const totalCount = job?.total_files ?? uploads.length;
-  const progressPercent =
-    totalCount > 0 ? Math.round((processedCount / totalCount) * 100) : 0;
+  const showSidePanel = uploads.length > 0;
 
   return (
-    <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-      <div>
+    <div
+      className={[
+        "mt-6 grid gap-6",
+        showSidePanel ? "lg:grid-cols-2" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="min-w-0">
         <div
           role="button"
           tabIndex={0}
@@ -327,10 +378,12 @@ export function ConverterWorkflow({
           }}
           onClick={() => inputRef.current?.click()}
           className={[
-            "rounded-2xl border-2 border-dashed p-6 text-center transition",
+            "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition lg:h-[360px] lg:min-h-[360px]",
             "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",
             "dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none",
-            isDragging ? "border-[var(--brand-500)] bg-[var(--brand-50)]" : "",
+            isDragging
+              ? "border-[var(--brand-500)] bg-zinc-200/80 dark:bg-[var(--surface-3)]"
+              : "",
           ]
             .filter(Boolean)
             .join(" ")}
@@ -352,7 +405,7 @@ export function ConverterWorkflow({
             </svg>
           </div>
           <p className="mt-4 text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-            Drop, upload, or paste files
+            {t("workflow.dropLabel")}
           </p>
           <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
             {formatLine}
@@ -366,10 +419,10 @@ export function ConverterWorkflow({
                 inputRef.current?.click();
               }}
             >
-              Browse files
+              {t("workflow.browseFiles")}
             </button>
             <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-              or drag and drop
+              {t("workflow.dragAndDrop")}
             </span>
           </div>
           <input
@@ -384,160 +437,109 @@ export function ConverterWorkflow({
           />
         </div>
 
-        <div className="mt-4 space-y-2">
-          {uploads.length === 0 ? (
-            <p className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-              No files selected yet.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {uploads.map((item, index) => {
-                const file = item.file;
-                const isProcessed =
-                  job?.status === "processing" || job?.status === "completed"
-                    ? processedCount > index
-                    : false;
-                const uploadLabel =
-                  item.status === "uploading"
-                    ? "Uploading"
-                    : item.status === "uploaded"
-                      ? "Uploaded"
-                      : item.status === "failed"
-                        ? "Failed"
-                        : "Ready";
-                const statusLabel =
-                  item.status === "failed"
-                    ? "Failed"
-                    : job?.status === "processing" || job?.status === "completed"
-                      ? isProcessed
-                        ? "Processed"
-                        : "Queued"
-                      : uploadLabel;
-                return (
+      </div>
+
+      {showSidePanel ? (
+        <div className="min-w-0 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none lg:h-[360px] lg:min-h-[360px] flex flex-col">
+          <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+            {outputs.length
+              ? t("workflow.results")
+              : t("workflow.selectedFiles")}
+          </div>
+          <div className="mt-3 flex-1 overflow-y-auto pr-1">
+            {outputs.length ? (
+              <ul className="space-y-2 text-xs">
+                {outputs.map((output) => (
                   <li
-                    key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)]"
+                    key={output.filename}
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
                   >
-                    <span className="min-w-0 truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-                      {file.name}
+                    <span className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                      {output.filename}
                     </span>
-                    <span className="ml-3 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-[var(--muted-2)]">
-                      <FileChip ext={file.name.split(".").pop()} />
-                      {formatBytes(file.size)}
-                      <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:border-[var(--border-2)] dark:text-[var(--muted-2)]">
-                        {statusLabel}
-                      </span>
+                      {output.downloadUrl ? (
+                        <a
+                          href={output.downloadUrl}
+                          className="inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {t("workflow.download")}
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-zinc-400 dark:text-[var(--muted-2)]">
+                          {t("workflow.processingLabel")}
+                        </span>
+                      )}
+                    </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="space-y-2 text-xs">
+                {uploads.map((item, index) => {
+                  const file = item.file;
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                          {file.name}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-[var(--muted-2)]">
+                          <FileChip ext={file.name.split(".").pop()} />
+                          <span>{formatBytes(file.size)}</span>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleRemoveFile(index, isBusy)}
-                        aria-label={`Remove ${file.name}`}
+                        aria-label={t("workflow.removeFileAria", {
+                          filename: file.name,
+                        })}
                         disabled={isBusy}
-                        className="rounded-full border border-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
+                        className="ml-3 inline-grid h-6 w-6 shrink-0 place-items-center rounded-full border border-zinc-200 text-[11px] font-semibold leading-none text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
                       >
-                        Remove
+                        X
                       </button>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
-          <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-            Status
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            {status ? (
-              <JobStatus ext={converter.outputFormat} state={status} />
-            ) : (
-              <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-                Waiting for upload.
-              </span>
-            )}
-            {jobId && (
-              <span className="text-xs text-zinc-400 dark:text-[var(--muted-2)]">Job #{jobId}</span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
-          {job ? (
-            <div className="mt-3 space-y-2">
-              <div className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-                {processedCount}/{totalCount} files processed
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-[var(--surface-3)]">
-                <div
-                  className="h-full rounded-full bg-[var(--brand-500)] transition-all"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
-          ) : null}
           {error && (
-            <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+            <p className="mt-3 text-xs text-red-600 dark:text-red-400">
               {error}
             </p>
           )}
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isBusy || uploads.length === 0}
-            className="mt-4 inline-flex items-center justify-center rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
-          >
-            {isSubmitting ? "Uploading..." : isBusy ? "Processing..." : "Convert now"}
-          </button>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
-          <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-            Results
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={isBusy}
+              className="inline-flex items-center justify-center rounded-full border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-600 transition hover:border-zinc-300 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
+            >
+              {t("workflow.clearAll")}
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isBusy || uploads.length === 0 || status === "success"}
+              className="inline-flex items-center justify-center rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
+            >
+              {status === "success"
+                ? t("workflow.converted")
+                : isSubmitting
+                  ? t("workflow.uploading")
+                  : isBusy
+                    ? t("workflow.processing")
+                    : t("workflow.convertNow")}
+            </button>
           </div>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-            Your converted file will appear here once processing completes.
-          </p>
-          <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-            <FileChip ext={primaryInput} />
-            <span className="text-zinc-400">-&gt;</span>
-            <FileChip ext={converter.outputFormat} />
-          </div>
-          {artifacts.length ? (
-            <ul className="mt-4 space-y-2 text-xs">
-              {artifacts.map((artifact) => {
-                const label =
-                  artifact.label ||
-                  artifact.file?.original_name ||
-                  "Artifact";
-                return (
-                  <li
-                    key={artifact.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
-                  >
-                    <span className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-                      {label}
-                    </span>
-                    {artifact.downloadUrl ? (
-                      <a
-                        href={artifact.downloadUrl}
-                        className="inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Download
-                      </a>
-                    ) : (
-                      <span className="text-[11px] text-zinc-400 dark:text-[var(--muted-2)]">
-                        Processing
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

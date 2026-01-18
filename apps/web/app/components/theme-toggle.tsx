@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "./language-provider";
 
 type ThemeMode = "light" | "dark";
 
@@ -12,6 +13,7 @@ const applyThemeClass = (mode: ThemeMode) => {
 
 export function ThemeToggle() {
   const [mode, setMode] = useState<ThemeMode>("light");
+  const t = useTranslations();
 
   useEffect(() => {
     const stored = localStorage.getItem(storageKey);
@@ -39,7 +41,7 @@ export function ThemeToggle() {
       type="button"
       role="switch"
       aria-checked={isDark}
-      aria-label="Toggle color mode"
+      aria-label={t("theme.toggleLabel")}
       onClick={handleToggle}
       className="inline-flex items-center gap-2 text-[11px] font-semibold text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:text-xs"
     >
@@ -63,7 +65,9 @@ export function ThemeToggle() {
             .join(" ")}
         />
       </span>
-      <span className="whitespace-nowrap">{isDark ? "Dark" : "Light"}</span>
+      <span className="whitespace-nowrap">
+        {isDark ? t("theme.dark") : t("theme.light")}
+      </span>
     </button>
   );
 }

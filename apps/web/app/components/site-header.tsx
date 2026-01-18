@@ -4,6 +4,8 @@ import { FileChip } from "@repo/ui/file-chip";
 import type { Converter } from "../lib/converters";
 import { ConverterCategoryIcon } from "./converter-category-icon";
 import { ThemeToggle } from "./theme-toggle";
+import { getCurrentLanguage } from "../lib/i18n";
+import { getTranslator } from "../lib/translations";
 import {
   getConverterCategoryGroups,
   getConverterHref,
@@ -15,9 +17,11 @@ type SiteHeaderProps = {
   currentSlug?: string;
 };
 
-export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
+export async function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleId = "converter-toggle";
   const converterGroups = getConverterCategoryGroups(converters);
+  const lang = await getCurrentLanguage();
+  const t = getTranslator(lang);
 
   return (
     <div className="flex flex-col gap-4">
@@ -26,7 +30,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         type="checkbox"
         className="peer sr-only"
         aria-controls="converter-panel"
-        aria-label="Toggle converters list"
+        aria-label={t("header.toggleConvertersList")}
       />
       <label
         htmlFor={toggleId}
@@ -52,7 +56,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             htmlFor={toggleId}
             className="inline-flex cursor-pointer list-none items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
           >
-            Converters
+            {t("header.converters")}
             <svg
               aria-hidden="true"
               viewBox="0 0 20 20"
@@ -72,7 +76,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             href="/ai-notemaker"
             className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
           >
-            AI NoteMaker
+            {t("header.aiNoteMaker")}
           </Link>
         </nav>
       </header>
@@ -131,7 +135,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           </div>
         </div>
         <div className="mt-3 text-center text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-          Scroll to view more converters.
+          {t("header.scrollMore")}
         </div>
       </div>
     </div>

@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { LanguageProvider } from "./components/language-provider";
+import { getCurrentLanguage } from "./lib/i18n";
+import { getMessages } from "./lib/translations";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -19,15 +22,20 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const lang = await getCurrentLanguage();
+  const messages = getMessages(lang);
+
   return (
-    <html lang="en">
+    <html lang={lang}>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
+        <LanguageProvider lang={lang} messages={messages}>
+          {children}
+        </LanguageProvider>
       </body>
     </html>
   );

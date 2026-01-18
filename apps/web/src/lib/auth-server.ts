@@ -12,10 +12,10 @@ const requireEnv = (key: EnvKey) => {
   return value;
 };
 
-export const getSupabaseServerClient = (): SupabaseClient => {
+export const getSupabaseServerClient = async (): Promise<SupabaseClient> => {
   const url = requireEnv("SUPABASE_URL");
   const anonKey = requireEnv("SUPABASE_ANON_KEY");
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
 
   return createServerClient(url, anonKey, {
     cookies: {
@@ -33,7 +33,7 @@ export const getSupabaseServerClient = (): SupabaseClient => {
 };
 
 export const getAuthUser = async (): Promise<User | null> => {
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error) {
     return null;

@@ -11,9 +11,16 @@ import {
 type ConverterGridProps = {
   converters: Converter[];
   currentSlug?: string;
+  heading?: string;
+  description?: string;
 };
 
-export function ConverterGrid({ converters, currentSlug }: ConverterGridProps) {
+export function ConverterGrid({
+  converters,
+  currentSlug,
+  heading = "Converters",
+  description = "Switch to another converter in one click.",
+}: ConverterGridProps) {
   const converterGroups = getConverterCategoryGroups(converters);
 
   return (
@@ -23,9 +30,9 @@ export function ConverterGrid({ converters, currentSlug }: ConverterGridProps) {
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Converters</h2>
+          <h2 className="text-lg font-semibold">{heading}</h2>
           <p className="text-sm text-zinc-600 dark:text-[var(--muted)]">
-            Switch to another converter in one click.
+            {description}
           </p>
         </div>
       </div>

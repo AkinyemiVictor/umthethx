@@ -1,4 +1,39 @@
-# Turborepo starter
+# umthethx
+
+Simple upload -> convert -> download tool. No accounts or history.
+
+## Local dev
+
+1. Copy `.env.example` to `.env` and set AWS + Redis.
+2. Install deps: `pnpm install`
+3. Start web (PowerShell): `$env:NEXT_DISABLE_TURBOPACK="1"; pnpm --filter web dev`
+4. Start worker: `pnpm --filter web run worker:convert`
+
+## Worker container
+
+Builds include LibreOffice, Poppler, Tesseract, ImageMagick, zbar/qrencode, and Python helpers.
+
+```
+docker build -t umthethx-worker .
+docker run --env-file .env umthethx-worker
+```
+
+## LibreTranslate
+
+Image translation uses LibreTranslate (defaults to `http://localhost:5000`).
+
+```
+docker run -p 5000:5000 libretranslate/libretranslate
+```
+
+## Output behavior
+
+- Multi-page outputs (PDF -> JPG, Word/Excel -> JPG) are zipped.
+- PDF -> HTML returns a zip with HTML + assets.
+
+---
+
+The notes below are from the original Turborepo starter template.
 
 This Turborepo starter is maintained by the Turborepo core team.
 

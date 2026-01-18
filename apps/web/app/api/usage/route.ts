@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   const periodStart = getPeriodStart();
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("usage_counters")

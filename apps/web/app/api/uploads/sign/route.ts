@@ -1,24 +1,20 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { converters } from "../../../../src/lib/converters";
-import { getAuthUser, getSupabaseServerClient } from "../../../../src/lib/auth-server";
-import {
-  createPresignedUploadUrl,
-  createUploadKey,
-  getS3Bucket,
-} from "../../../../src/lib/s3";
-import { getUserPlan } from "../../../lib/plans";
+import { buildUploadKey, signPutObject } from "../../../../src/lib/s3";
 
 export const runtime = "nodejs";
 
 type SignRequest = {
   filename?: string;
+  contentType?: string;
   mime?: string;
   sizeBytes?: number;
+  jobId?: string;
 };
 
-const MAX_FREE_BYTES = 25 * 1024 * 1024;
-const MAX_PRO_BYTES = 200 * 1024 * 1024;
+const MAX_FILENAME_LENGTH = 180;
+const MAX_BYTES = 200 * 1024 * 1024;
 
 const { allowedMimeTypes, wildcardPrefixes } = converters.reduce(
   (acc, converter) => {
@@ -50,90 +46,86 @@ const isMimeAllowed = (mime: string) => {
 };
 
 export async function POST(request: Request) {
-  const user = await getAuthUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
-  let body: SignRequest;
   try {
-    body = (await request.json()) as SignRequest;
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON payload." },
-      { status: 400 },
-    );
+    let body: SignRequest;
+    try {
+      body = (await request.json()) as SignRequest;
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON payload." },
+        { status: 400 },
+      );
+    }
+
+    const filename = body.filename?.trim();
+    const contentType = body.contentType?.trim() || body.mime?.trim();
+    const sizeBytes = Number(body.sizeBytes);
+    const jobId = body.jobId?.trim() || randomUUID();
+
+    if (!filename || !contentType) {
+      return NextResponse.json(
+        { error: "filename and contentType are required." },
+        { status: 400 },
+      );
+    }
+
+    if (filename.length > MAX_FILENAME_LENGTH) {
+      return NextResponse.json(
+        { error: "filename is too long." },
+        { status: 400 },
+      );
+    }
+
+    if (/[\\/]/.test(filename)) {
+      return NextResponse.json(
+        { error: "filename must not include path separators." },
+        { status: 400 },
+      );
+    }
+
+    if (jobId.includes("/") || jobId.includes("..")) {
+      return NextResponse.json(
+        { error: "jobId is invalid." },
+        { status: 400 },
+      );
+    }
+
+    if (Number.isFinite(sizeBytes) && sizeBytes <= 0) {
+      return NextResponse.json(
+        { error: "sizeBytes must be greater than 0." },
+        { status: 400 },
+      );
+    }
+
+    if (Number.isFinite(sizeBytes) && sizeBytes > MAX_BYTES) {
+      return NextResponse.json(
+        { error: "File exceeds the upload size limit." },
+        { status: 413 },
+      );
+    }
+
+    if (!isMimeAllowed(contentType)) {
+      return NextResponse.json(
+        { error: "File type is not supported." },
+        { status: 415 },
+      );
+    }
+
+    const key = buildUploadKey(jobId, filename);
+    const { uploadUrl, expiresIn } = await signPutObject({
+      key,
+      contentType,
+    });
+
+    return NextResponse.json({
+      jobId,
+      uploadUrl,
+      key,
+      expiresIn,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to create upload URL.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const filename = body.filename?.trim();
-  const mime = body.mime?.trim();
-  const sizeBytes = Number(body.sizeBytes);
-
-  if (!filename || !mime || !Number.isFinite(sizeBytes)) {
-    return NextResponse.json(
-      { error: "filename, mime, and sizeBytes are required." },
-      { status: 400 },
-    );
-  }
-
-  if (sizeBytes <= 0) {
-    return NextResponse.json(
-      { error: "sizeBytes must be greater than 0." },
-      { status: 400 },
-    );
-  }
-
-  if (!isMimeAllowed(mime)) {
-    return NextResponse.json(
-      { error: "File type is not supported." },
-      { status: 415 },
-    );
-  }
-
-  const plan = await getUserPlan(user.id);
-  const maxBytes = plan === "pro" ? MAX_PRO_BYTES : MAX_FREE_BYTES;
-
-  if (sizeBytes > maxBytes) {
-    return NextResponse.json(
-      { error: `File exceeds the ${plan} plan limit.` },
-      { status: 413 },
-    );
-  }
-
-  const key = createUploadKey(user.id, filename);
-  const { uploadUrl, expiresIn } = await createPresignedUploadUrl({
-    key,
-    mime,
-  });
-  const bucket = getS3Bucket();
-  const fileId = randomUUID();
-
-  const supabase = getSupabaseServerClient();
-  const { error: insertError } = await supabase.from("files").insert({
-    id: fileId,
-    user_id: user.id,
-    job_id: null,
-    kind: "upload",
-    bucket,
-    key,
-    original_name: filename,
-    size_bytes: Math.trunc(sizeBytes),
-    mime,
-    retained: false,
-  });
-
-  if (insertError) {
-    return NextResponse.json(
-      { error: insertError.message },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({
-    uploadUrl,
-    key,
-    bucket,
-    expiresIn,
-    fileId,
-  });
 }

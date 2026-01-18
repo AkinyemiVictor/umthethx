@@ -1,5 +1,5 @@
 import { getAuthUser, getSupabaseServerClient } from "./auth-server";
-import { createPresignedDownloadUrl } from "./s3";
+import { signGetObject } from "./s3";
 
 type HistoryFile = {
   id: string;
@@ -46,7 +46,7 @@ export const getHistoryData = async (): Promise<HistoryResponse | null> => {
     return null;
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = await getSupabaseServerClient();
   const { data: jobs, error: jobsError } = await supabase
     .from("jobs")
     .select(
@@ -83,10 +83,7 @@ export const getHistoryData = async (): Promise<HistoryResponse | null> => {
           return { ...artifact, file, downloadUrl: null };
         }
         try {
-          const { downloadUrl } = await createPresignedDownloadUrl({
-            key: file.key,
-            bucket: file.bucket ?? undefined,
-          });
+          const { downloadUrl } = await signGetObject({ key: file.key });
           return { ...artifact, file, downloadUrl };
         } catch {
           return { ...artifact, file, downloadUrl: null };

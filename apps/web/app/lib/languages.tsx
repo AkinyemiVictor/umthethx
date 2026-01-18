@@ -1,5 +1,7 @@
+import type { LanguageCode } from "./translations";
+
 export type Language = {
-  code: string;
+  code: LanguageCode;
   label: string;
   flag: JSX.Element;
 };
