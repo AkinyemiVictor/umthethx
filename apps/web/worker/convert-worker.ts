@@ -1,5 +1,5 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { Worker } from "bullmq";
+import { Worker, type ConnectionOptions } from "bullmq";
 import { createReadStream, createWriteStream } from "fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import { tmpdir } from "os";
@@ -715,7 +715,7 @@ const worker = new Worker(
       throw error;
     }
   },
-  { connection },
+  { connection: connection as unknown as ConnectionOptions },
 );
 
 worker.on("failed", async (bullJob, error) => {

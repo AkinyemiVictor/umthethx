@@ -1,4 +1,4 @@
-import { permanentRedirect } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 
 type PageProps = {
   params: Promise<{
@@ -11,5 +11,8 @@ export default async function ConverterSlugPage({ params }: PageProps) {
   const slug = Array.isArray(resolvedParams.slug)
     ? resolvedParams.slug[0]
     : resolvedParams.slug;
+  if (!slug) {
+    notFound();
+  }
   permanentRedirect(`/convert/${encodeURIComponent(slug)}`);
 }

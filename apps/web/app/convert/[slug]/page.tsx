@@ -13,6 +13,9 @@ export default async function ConverterSlugPage({ params }: PageProps) {
   const slug = Array.isArray(resolvedParams.slug)
     ? resolvedParams.slug[0]
     : resolvedParams.slug;
+  if (!slug) {
+    notFound();
+  }
   const converter = getConverterBySlug(slug);
   if (!converter) {
     notFound();

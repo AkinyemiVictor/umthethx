@@ -699,8 +699,8 @@ export const translations = {
   },
 } as const;
 
-export type Messages = typeof translations.en;
-export type TranslationKey = keyof Messages;
+export type TranslationKey = keyof typeof translations.en;
+export type Messages = Record<TranslationKey, string>;
 
 export const getMessages = (lang: LanguageCode): Messages =>
   translations[lang] ?? translations[DEFAULT_LANGUAGE];

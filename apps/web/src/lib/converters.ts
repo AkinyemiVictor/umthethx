@@ -89,7 +89,7 @@ const buildAccept = (
   const normalizedExtensions = uniqueValues(extensions);
   const derivedMimeTypes = normalizedExtensions
     .map((ext) => mimeByExtension[ext])
-    .filter(Boolean);
+    .filter((mime): mime is string => Boolean(mime));
   const mimeTypes = uniqueValues([...extraMimeTypes, ...derivedMimeTypes]);
   return { extensions: normalizedExtensions, mimeTypes };
 };

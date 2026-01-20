@@ -108,7 +108,8 @@ const extFromMime = (mime?: string) => {
 
 export function familyForExt(ext?: string): Family {
   const key = normalizeExt(ext);
-  return (key && extensionMap[key]) ?? "zinc";
+  if (!key) return "zinc";
+  return extensionMap[key] ?? "zinc";
 }
 
 export function resolveFileType(options?: {

@@ -1,4 +1,4 @@
-import { Queue } from "bullmq";
+import { Queue, type ConnectionOptions } from "bullmq";
 import IORedis from "ioredis";
 
 type EnvKey = "REDIS_URL";
@@ -20,5 +20,5 @@ export const getRedisConnection = () =>
 
 export const getQueue = () =>
   new Queue(QUEUE_NAME, {
-    connection: getRedisConnection(),
+    connection: getRedisConnection() as unknown as ConnectionOptions,
   });
