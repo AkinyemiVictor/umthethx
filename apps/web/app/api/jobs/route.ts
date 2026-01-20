@@ -36,7 +36,8 @@ const { allowedMimeTypes, wildcardPrefixes } = converters.reduce(
   },
 );
 
-const normalizeMime = (mime: string) => mime.toLowerCase().split(";")[0]?.trim();
+const normalizeMime = (mime: string) =>
+  mime.toLowerCase().split(";")[0]?.trim() ?? "";
 
 const isMimeAllowed = (mime?: string) => {
   const normalized = mime ? normalizeMime(mime) : "";

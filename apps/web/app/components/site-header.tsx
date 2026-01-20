@@ -78,6 +78,12 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           >
             {t("header.aiNoteMaker")}
           </Link>
+          <Link
+            href="/translator"
+            className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+          >
+            {t("header.translator")}
+          </Link>
         </nav>
       </header>
 
