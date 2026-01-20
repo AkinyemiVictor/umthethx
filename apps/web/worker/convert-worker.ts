@@ -27,8 +27,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const scriptsDir = path.join(__dirname, "scripts");
 
-dotenv.config({ path: path.resolve(process.cwd(), "../../.env.local") });
-dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
+dotenv.config({ path: path.resolve(process.cwd(), "../../.env.local"), override: true });
+dotenv.config({ path: path.resolve(process.cwd(), "../../.env"), override: true });
 
 const s3 = getS3Client();
 const bucket = getS3Bucket();
@@ -40,6 +40,7 @@ const LIBRETRANSLATE_TARGET =
 const LIBRETRANSLATE_SOURCE =
   process.env.LIBRETRANSLATE_SOURCE_LANG?.trim() || "auto";
 const LIBRETRANSLATE_API_KEY = process.env.LIBRETRANSLATE_API_KEY?.trim();
+const TESSERACT_BIN = process.env.TESSERACT_BIN?.trim() || "tesseract";
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -119,6 +120,68 @@ const runCommand = (
     });
   });
 
+type PythonCommand = {
+  command: string;
+  baseArgs: string[];
+};
+
+let cachedPython: PythonCommand | null = null;
+let resolvingPython: Promise<PythonCommand> | null = null;
+
+const getPythonCommand = async (): Promise<PythonCommand> => {
+  if (cachedPython) return cachedPython;
+  if (resolvingPython) return resolvingPython;
+
+  resolvingPython = (async () => {
+    const envBin = process.env.PYTHON_BIN?.trim() || process.env.PYTHON?.trim();
+    const candidates: PythonCommand[] = [];
+    if (envBin) {
+      candidates.push({ command: envBin, baseArgs: [] });
+    }
+    if (process.platform === "win32") {
+      candidates.push(
+        { command: "py", baseArgs: ["-3"] },
+        { command: "python", baseArgs: [] },
+        { command: "python3", baseArgs: [] },
+      );
+    } else {
+      candidates.push(
+        { command: "python3", baseArgs: [] },
+        { command: "python", baseArgs: [] },
+      );
+    }
+
+    let lastError: unknown;
+    for (const candidate of candidates) {
+      try {
+        await runCommand(candidate.command, [
+          ...candidate.baseArgs,
+          "--version",
+        ]);
+        cachedPython = candidate;
+        return candidate;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    const hint =
+      lastError instanceof Error && lastError.message
+        ? ` Last error: ${lastError.message}`
+        : "";
+    throw new Error(
+      `Python 3 not found. Install Python or set PYTHON_BIN to your python executable.${hint}`,
+    );
+  })();
+
+  return resolvingPython;
+};
+
+const runPython = async (args: string[]) => {
+  const python = await getPythonCommand();
+  return runCommand(python.command, [...python.baseArgs, ...args]);
+};
+
 const runImageMagick = async (args: string[]) => {
   try {
     await runCommand("magick", args);
@@ -178,7 +241,7 @@ const uploadOutput = async (filePath: string, key: string) => {
 };
 
 const runTesseractToText = async (inputPath: string, outputBase: string) => {
-  await runCommand("tesseract", [inputPath, outputBase, "-l", "eng"]);
+  await runCommand(TESSERACT_BIN, [inputPath, outputBase, "-l", "eng"]);
   return `${outputBase}.txt`;
 };
 
@@ -257,12 +320,12 @@ const runPdfToHtml = async (inputPath: string, outputDir: string) => {
 
 const runPdfTableExtract = async (inputPath: string, outputPath: string) => {
   const script = path.join(scriptsDir, "pdf_to_tables.py");
-  await runCommand("python3", [script, inputPath, outputPath]);
+  await runPython([script, inputPath, outputPath]);
 };
 
 const runCsvToJson = async (inputPath: string, outputPath: string) => {
   const script = path.join(scriptsDir, "csv_to_json.py");
-  await runCommand("python3", [script, inputPath, outputPath]);
+  await runPython([script, inputPath, outputPath]);
 };
 
 const runQrScan = async (inputPath: string) => {
@@ -275,7 +338,7 @@ const runQrEncode = async (text: string, outputPath: string) => {
 };
 
 const runImageToPdf = async (inputPath: string, outputPath: string) => {
-  await runCommand("python3", ["-m", "img2pdf", inputPath, "-o", outputPath]);
+  await runPython(["-m", "img2pdf", inputPath, "-o", outputPath]);
 };
 
 const buildOutputName = (base: string, ext: string) =>
