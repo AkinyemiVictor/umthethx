@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { languages } from "../lib/languages";
+import { defaultLanguage, languages } from "../lib/languages";
 import { useLanguage, useTranslations } from "./language-provider";
 
 export function LanguageMenu() {
@@ -9,7 +9,7 @@ export function LanguageMenu() {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const currentLanguage = useMemo(
-    () => languages.find((item) => item.code === lang) ?? languages[0],
+    () => languages.find((item) => item.code === lang) ?? defaultLanguage,
     [lang],
   );
 

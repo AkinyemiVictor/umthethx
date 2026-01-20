@@ -55,8 +55,14 @@ const FlagAr = () => (
   </svg>
 );
 
+export const defaultLanguage: Language = {
+  code: "en",
+  label: "English",
+  flag: <FlagUs />,
+};
+
 export const languages: Language[] = [
-  { code: "en", label: "English", flag: <FlagUs /> },
+  defaultLanguage,
   { code: "fr", label: "French", flag: <FlagFr /> },
   { code: "es", label: "Spanish", flag: <FlagEs /> },
   { code: "de", label: "German", flag: <FlagDe /> },
