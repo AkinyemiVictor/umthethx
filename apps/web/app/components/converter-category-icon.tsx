@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import type { ConverterCategoryIcon as ConverterCategoryIconName } from "../lib/converters";
 
 type ConverterCategoryIconProps = {
@@ -5,7 +6,7 @@ type ConverterCategoryIconProps = {
   className?: string;
 };
 
-const iconPaths: Record<ConverterCategoryIconName, JSX.Element> = {
+const iconPaths: Record<ConverterCategoryIconName, ReactElement> = {
   "image-doc": (
     <>
       <rect x="3" y="6" width="10" height="8" rx="2" fill="#9fd4ff" />

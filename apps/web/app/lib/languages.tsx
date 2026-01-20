@@ -1,9 +1,10 @@
+import type { ReactElement } from "react";
 import type { LanguageCode } from "./translations";
 
 export type Language = {
   code: LanguageCode;
   label: string;
-  flag: JSX.Element;
+  flag: ReactElement;
 };
 
 const FlagUs = () => (
