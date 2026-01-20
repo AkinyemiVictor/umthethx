@@ -35,13 +35,14 @@ const pickDefaultTarget = (
   preferred: string,
   exclude?: string,
 ) => {
-  if (!options.length) return preferred;
+  if (options.length === 0) return preferred;
+  const first = options[0];
   if (preferred && preferred !== exclude) {
     const preferredMatch = options.find((lang) => lang.code === preferred);
     if (preferredMatch) return preferredMatch.code;
   }
   const fallback = options.find((lang) => lang.code !== exclude);
-  return fallback?.code ?? options[0].code;
+  return fallback?.code ?? first?.code ?? preferred;
 };
 
 export function TranslatorWorkflow() {
