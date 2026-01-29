@@ -76,11 +76,18 @@ export const signPutObject = async (options: {
 export const signGetObject = async (options: {
   key: string;
   expiresInSeconds?: number;
+  filename?: string;
+  contentType?: string;
 }) => {
   const expiresIn = options.expiresInSeconds ?? 300;
+  const safeName = options.filename ? sanitizeFileName(options.filename) : null;
   const command = new GetObjectCommand({
     Bucket: getS3Bucket(),
     Key: options.key,
+    ...(safeName
+      ? { ResponseContentDisposition: `attachment; filename="${safeName}"` }
+      : {}),
+    ...(options.contentType ? { ResponseContentType: options.contentType } : {}),
   });
   const downloadUrl = await getSignedUrl(getS3Client(), command, { expiresIn });
   return { downloadUrl, expiresIn };

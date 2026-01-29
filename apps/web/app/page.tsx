@@ -8,6 +8,7 @@ import {
 } from "../src/lib/converters";
 import { ConverterWorkflow } from "./components/converter-workflow";
 import { AdSlot } from "./components/ad-slot";
+import { MobileRectangleAds } from "./components/mobile-rectangle-ads";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeader } from "./components/site-header";
 import { getCurrentLanguage } from "./lib/i18n";
@@ -105,6 +106,8 @@ export default async function Home() {
             ))}
           </div>
         </section>
+
+        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
 
         <ConverterGrid
           converters={converters}

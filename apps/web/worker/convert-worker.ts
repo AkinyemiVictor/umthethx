@@ -9,11 +9,13 @@ import { spawn } from "child_process";
 import { Readable } from "stream";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { PDFDocument } from "pdf-lib";
 import {
   buildArtifactKey,
   getS3Bucket,
   getS3Client,
 } from "../src/lib/s3";
+import { detectTextFromImageBytes } from "../src/lib/textract";
 import {
   getJobRecord,
   updateJobRecord,
@@ -119,6 +121,14 @@ const runCommand = (
       );
     });
   });
+
+const isMissingCommandError = (error: unknown) => {
+  if (!error || typeof error !== "object") return false;
+  const err = error as NodeJS.ErrnoException;
+  if (err.code === "ENOENT") return true;
+  const message = typeof err.message === "string" ? err.message : "";
+  return message.toLowerCase().includes("enoent") || message.toLowerCase().includes("not found");
+};
 
 type PythonCommand = {
   command: string;
@@ -241,8 +251,38 @@ const uploadOutput = async (filePath: string, key: string) => {
 };
 
 const runTesseractToText = async (inputPath: string, outputBase: string) => {
-  await runCommand(TESSERACT_BIN, [inputPath, outputBase, "-l", "eng"]);
-  return `${outputBase}.txt`;
+  try {
+    await runCommand(TESSERACT_BIN, [inputPath, outputBase, "-l", "eng"]);
+    return `${outputBase}.txt`;
+  } catch (error) {
+    if (!isMissingCommandError(error)) {
+      throw error;
+    }
+    if (TESSERACT_BIN !== "tesseract") {
+      try {
+        await runCommand("tesseract", [inputPath, outputBase, "-l", "eng"]);
+        return `${outputBase}.txt`;
+      } catch (fallbackError) {
+        if (!isMissingCommandError(fallbackError)) {
+          throw fallbackError;
+        }
+      }
+    }
+  }
+
+  try {
+    const bytes = await readFile(inputPath);
+    const text = await detectTextFromImageBytes(bytes);
+    const outputPath = `${outputBase}.txt`;
+    await writeFile(outputPath, text ?? "", "utf8");
+    return outputPath;
+  } catch (textractError) {
+    const message =
+      textractError instanceof Error
+        ? textractError.message
+        : "Textract OCR failed.";
+    throw new Error(`Tesseract not available and Textract failed: ${message}`);
+  }
 };
 
 const translateText = async (text: string) => {
@@ -337,8 +377,65 @@ const runQrEncode = async (text: string, outputPath: string) => {
   await runCommand("qrencode", ["-o", outputPath, "-s", "8", "-m", "2", text]);
 };
 
+const isImg2PdfMissing = (error: unknown) => {
+  if (isMissingCommandError(error)) return true;
+  const message = error instanceof Error ? error.message : "";
+  if (!message) return false;
+  return (
+    message.includes("Python 3 not found") ||
+    message.includes("No module named") ||
+    message.toLowerCase().includes("img2pdf")
+  );
+};
+
+const runImageToPdfWithPdfLib = async (inputPath: string, outputPath: string) => {
+  const ext = path.extname(inputPath).slice(1).toLowerCase();
+  const bytes = await readFile(inputPath);
+  const pdfDoc = await PDFDocument.create();
+  let image;
+
+  if (ext === "jpg" || ext === "jpeg") {
+    image = await pdfDoc.embedJpg(bytes);
+  } else if (ext === "png") {
+    image = await pdfDoc.embedPng(bytes);
+  } else {
+    throw new Error(
+      `Image to PDF fallback supports JPG or PNG only (received .${ext || "unknown"}).`,
+    );
+  }
+
+  const page = pdfDoc.addPage([image.width, image.height]);
+  page.drawImage(image, {
+    x: 0,
+    y: 0,
+    width: image.width,
+    height: image.height,
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  await writeFile(outputPath, pdfBytes);
+};
+
 const runImageToPdf = async (inputPath: string, outputPath: string) => {
-  await runPython(["-m", "img2pdf", inputPath, "-o", outputPath]);
+  try {
+    await runPython(["-m", "img2pdf", inputPath, "-o", outputPath]);
+    return;
+  } catch (error) {
+    if (!isImg2PdfMissing(error)) {
+      throw error;
+    }
+  }
+
+  try {
+    await runImageToPdfWithPdfLib(inputPath, outputPath);
+  } catch (fallbackError) {
+    if (fallbackError instanceof Error && fallbackError.message.includes("fallback supports")) {
+      throw new Error(
+        `${fallbackError.message} Install Python + img2pdf for TIFF or other formats.`,
+      );
+    }
+    throw fallbackError;
+  }
 };
 
 const buildOutputName = (base: string, ext: string) =>

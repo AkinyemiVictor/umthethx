@@ -11,6 +11,7 @@ import { getCurrentLanguage } from "../lib/i18n";
 import { getTranslator } from "../lib/translations";
 import { AdSlot } from "./ad-slot";
 import { ConverterWorkflow } from "./converter-workflow";
+import { MobileRectangleAds } from "./mobile-rectangle-ads";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 import { ConverterGrid } from "../../src/components/ConverterGrid";
@@ -242,6 +243,8 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
             ))}
           </div>
         </section>
+
+        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
 
         <ConverterGrid
           converters={converters}

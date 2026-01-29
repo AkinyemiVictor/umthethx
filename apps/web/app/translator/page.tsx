@@ -1,4 +1,5 @@
 import { AdSlot } from "../components/ad-slot";
+import { MobileRectangleAds } from "../components/mobile-rectangle-ads";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { TranslatorWorkflow } from "../components/translator-workflow";
@@ -74,6 +75,8 @@ export default async function TranslatorPage() {
             ))}
           </div>
         </section>
+
+        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
 
         <AdSlot label={t("ads.label")} text={t("ads.text")} />
 

@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { LanguageProvider } from "./components/language-provider";
+import { PageAds } from "./components/page-ads";
 import { getCurrentLanguage } from "./lib/i18n";
-import { getMessages } from "./lib/translations";
+import { getMessages, getTranslator } from "./lib/translations";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -29,12 +30,15 @@ export default async function RootLayout({
 }>) {
   const lang = await getCurrentLanguage();
   const messages = getMessages(lang);
+  const t = getTranslator(lang);
 
   return (
     <html lang={lang}>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <LanguageProvider lang={lang} messages={messages}>
-          {children}
+          <PageAds label={t("ads.label")} text={t("ads.text")}>
+            {children}
+          </PageAds>
         </LanguageProvider>
       </body>
     </html>

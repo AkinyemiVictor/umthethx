@@ -19,13 +19,20 @@ const requireEnv = (key: EnvKey) => {
   return value;
 };
 
-const textractClient = new TextractClient({
-  region: requireEnv("AWS_REGION"),
-  credentials: {
-    accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
-    secretAccessKey: requireEnv("AWS_SECRET_ACCESS_KEY"),
-  },
-});
+let cachedClient: TextractClient | null = null;
+
+const getTextractClient = () => {
+  if (!cachedClient) {
+    cachedClient = new TextractClient({
+      region: requireEnv("AWS_REGION"),
+      credentials: {
+        accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
+        secretAccessKey: requireEnv("AWS_SECRET_ACCESS_KEY"),
+      },
+    });
+  }
+  return cachedClient;
+};
 
 const extractLines = (blocks?: Block[]) =>
   (blocks ?? [])
@@ -40,7 +47,7 @@ const sleep = (ms: number) =>
   });
 
 export const detectTextFromImageBytes = async (buffer: Uint8Array) => {
-  const response = await textractClient.send(
+  const response = await getTextractClient().send(
     new DetectDocumentTextCommand({
       Document: { Bytes: buffer },
     }),
@@ -54,7 +61,7 @@ export const detectTextFromPdfS3 = async (
   options?: { maxWaitMs?: number },
 ) => {
   const maxWaitMs = options?.maxWaitMs ?? 180_000;
-  const startResponse = await textractClient.send(
+  const startResponse = await getTextractClient().send(
     new StartDocumentTextDetectionCommand({
       DocumentLocation: {
         S3Object: {
@@ -75,7 +82,7 @@ export const detectTextFromPdfS3 = async (
   const lines: string[] = [];
 
   while (Date.now() < deadline) {
-    const response = await textractClient.send(
+    const response = await getTextractClient().send(
       new GetDocumentTextDetectionCommand({
         JobId: startResponse.JobId,
         NextToken: nextToken,

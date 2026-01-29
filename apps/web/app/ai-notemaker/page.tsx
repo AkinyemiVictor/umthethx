@@ -1,4 +1,5 @@
 import { AdSlot } from "../components/ad-slot";
+import { MobileRectangleAds } from "../components/mobile-rectangle-ads";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { converters, footerConverters } from "../lib/converters";
@@ -98,6 +99,8 @@ export default async function AiNoteMakerPage() {
             </div>
           </div>
         </section>
+
+        <MobileRectangleAds label="Advertisement slot" text="Ad space" />
 
         <AdSlot label="Advertisement slot" />
 

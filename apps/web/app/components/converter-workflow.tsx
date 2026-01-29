@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -106,6 +107,11 @@ export function ConverterWorkflow({
   const [status, setStatus] = useState<WorkflowStatus | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [outputs, setOutputs] = useState<JobOutput[]>([]);
+  const [textPreview, setTextPreview] = useState("");
+  const [textPreviewName, setTextPreviewName] = useState<string | null>(null);
+  const [textPreviewError, setTextPreviewError] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [job, setJob] = useState<JobSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -117,6 +123,11 @@ export function ConverterWorkflow({
     setStatus(null);
     setJobId(null);
     setOutputs([]);
+    setTextPreview("");
+    setTextPreviewName(null);
+    setTextPreviewError(null);
+    setIsPreviewLoading(false);
+    setIsCopied(false);
     setJob(null);
     setError(null);
   };
@@ -347,6 +358,73 @@ export function ConverterWorkflow({
     };
   }, [jobId, status]);
 
+  const textOutputs = useMemo(
+    () =>
+      outputs.filter((output) =>
+        output.filename.toLowerCase().endsWith(".txt"),
+      ),
+    [outputs],
+  );
+
+  useEffect(() => {
+    if (!textOutputs.length) {
+      setTextPreview("");
+      setTextPreviewName(null);
+      setTextPreviewError(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    const active =
+      textOutputs.find((output) => output.filename === textPreviewName) ??
+      textOutputs[0];
+    if (!active?.downloadUrl) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsPreviewLoading(true);
+    setTextPreviewError(null);
+
+    fetch(active.downloadUrl)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Preview failed.");
+        }
+        return res.text();
+      })
+      .then((text) => {
+        if (cancelled) return;
+        setTextPreview(text);
+        setTextPreviewName(active.filename);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTextPreview("");
+        setTextPreviewError(t("workflow.previewFailed"));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsPreviewLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [textOutputs, textPreviewName, t]);
+
+  const handleCopyText = async () => {
+    if (!textPreview.trim()) return;
+    try {
+      await navigator.clipboard.writeText(textPreview);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch {
+      setTextPreviewError(t("workflow.copyFailed"));
+    }
+  };
+
   const isBusy =
     isSubmitting || job?.status === "queued" || job?.status === "processing";
   const showSidePanel = uploads.length > 0;
@@ -361,81 +439,143 @@ export function ConverterWorkflow({
         .join(" ")}
     >
       <div className="min-w-0">
-        <div
-          role="button"
-          tabIndex={0}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
+        {textOutputs.length ? (
+          <div className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none lg:h-[360px] lg:min-h-[360px]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                {t("workflow.textPreviewTitle")}
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyText}
+                disabled={!textPreview.trim() || isPreviewLoading}
+                aria-label={isCopied ? t("workflow.copied") : t("workflow.copyText")}
+                title={isCopied ? t("workflow.copied") : t("workflow.copyText")}
+                className="inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="9" y="9" width="11" height="11" rx="2" />
+                  <rect x="4" y="4" width="11" height="11" rx="2" />
+                </svg>
+              </button>
+            </div>
+            {textOutputs.length > 1 ? (
+              <select
+                className="mt-3 w-full rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)]"
+                value={textPreviewName ?? textOutputs[0]?.filename}
+                onChange={(event) => setTextPreviewName(event.target.value)}
+              >
+                {textOutputs.map((output) => (
+                  <option key={output.filename} value={output.filename}>
+                    {output.filename}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <div className="mt-3 flex-1">
+              {isPreviewLoading ? (
+                <div className="text-[11px] text-zinc-400 dark:text-[var(--muted-2)]">
+                  {t("workflow.previewLoading")}
+                </div>
+              ) : textPreviewError ? (
+                <div className="text-[11px] text-red-600 dark:text-red-400">
+                  {textPreviewError}
+                </div>
+              ) : (
+                <textarea
+                  readOnly
+                  className="h-full min-h-[240px] w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)]"
+                  value={textPreview}
+                />
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onDragOver={(event) => {
               event.preventDefault();
-              inputRef.current?.click();
-            }
-          }}
-          onClick={() => inputRef.current?.click()}
-          className={[
-            "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition lg:h-[360px] lg:min-h-[360px]",
-            "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",
-            "dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none",
-            isDragging
-              ? "border-[var(--brand-500)] bg-zinc-200/80 dark:bg-[var(--surface-3)]"
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 16V6" />
-              <path d="M8 10l4-4 4 4" />
-              <path d="M4 18h16" />
-            </svg>
-          </div>
-          <p className="mt-4 text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-            {t("workflow.dropLabel")}
-          </p>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-            {formatLine}
-          </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
-              onClick={(event) => {
-                event.stopPropagation();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
                 inputRef.current?.click();
-              }}
-            >
-              {t("workflow.browseFiles")}
-            </button>
-            <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
-              {t("workflow.dragAndDrop")}
-            </span>
+              }
+            }}
+            onClick={() => inputRef.current?.click()}
+            className={[
+              "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition lg:h-[360px] lg:min-h-[360px]",
+              "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",
+              "dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none",
+              isDragging
+                ? "border-[var(--brand-500)] bg-zinc-200/80 dark:bg-[var(--surface-3)]"
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 16V6" />
+                <path d="M8 10l4-4 4 4" />
+                <path d="M4 18h16" />
+              </svg>
+            </div>
+            <p className="mt-4 text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+              {t("workflow.dropLabel")}
+            </p>
+            <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+              {formatLine}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  inputRef.current?.click();
+                }}
+              >
+                {t("workflow.browseFiles")}
+              </button>
+              <span className="text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+                {t("workflow.dragAndDrop")}
+              </span>
+            </div>
+            <input
+              ref={inputRef}
+              id="file-upload"
+              type="file"
+              accept={accept}
+              multiple
+              className="sr-only"
+              aria-label={`Upload ${uploadLabel} files`}
+              onChange={handleFileChange}
+            />
           </div>
-          <input
-            ref={inputRef}
-            id="file-upload"
-            type="file"
-            accept={accept}
-            multiple
-            className="sr-only"
-            aria-label={`Upload ${uploadLabel} files`}
-            onChange={handleFileChange}
-          />
-        </div>
+        )}
       </div>
 
       {showSidePanel ? (
@@ -447,32 +587,33 @@ export function ConverterWorkflow({
           </div>
           <div className="mt-3 flex-1 overflow-y-auto pr-1">
             {outputs.length ? (
-              <ul className="space-y-2 text-xs">
-                {outputs.map((output) => (
-                  <li
-                    key={output.filename}
-                    className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
-                  >
-                    <span className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-                      {output.filename}
-                    </span>
-                    {output.downloadUrl ? (
-                      <a
-                        href={output.downloadUrl}
-                        className="inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {t("workflow.download")}
-                      </a>
-                    ) : (
-                      <span className="text-[11px] text-zinc-400 dark:text-[var(--muted-2)]">
-                        {t("workflow.processingLabel")}
+              <>
+                <ul className="space-y-2 text-xs">
+                  {outputs.map((output) => (
+                    <li
+                      key={output.filename}
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
+                    >
+                      <span className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+                        {output.filename}
                       </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                      {output.downloadUrl ? (
+                        <a
+                          href={output.downloadUrl}
+                          download={output.filename}
+                          className="inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
+                        >
+                          {t("workflow.download")}
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-zinc-400 dark:text-[var(--muted-2)]">
+                          {t("workflow.processingLabel")}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : (
               <ul className="space-y-2 text-xs">
                 {uploads.map((item, index) => {
