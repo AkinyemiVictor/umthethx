@@ -9,6 +9,7 @@ import { spawn } from "child_process";
 import { Readable } from "stream";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { Document, Packer, Paragraph } from "docx";
 import { PDFDocument } from "pdf-lib";
 import {
   buildArtifactKey,
@@ -135,8 +136,25 @@ type PythonCommand = {
   baseArgs: string[];
 };
 
+type LibreOfficeCommand = {
+  command: string;
+  baseArgs: string[];
+};
+
+type XlsxModule = typeof import("xlsx");
+type ImageMagickCommand = {
+  command: string;
+  baseArgs: string[];
+};
+
 let cachedPython: PythonCommand | null = null;
 let resolvingPython: Promise<PythonCommand> | null = null;
+let cachedLibreOffice: LibreOfficeCommand | null = null;
+let resolvingLibreOffice: Promise<LibreOfficeCommand | null> | null = null;
+let cachedXlsx: XlsxModule | null = null;
+let resolvingXlsx: Promise<XlsxModule> | null = null;
+let cachedImageMagick: ImageMagickCommand | null = null;
+let resolvingImageMagick: Promise<ImageMagickCommand> | null = null;
 
 const getPythonCommand = async (): Promise<PythonCommand> => {
   if (cachedPython) return cachedPython;
@@ -192,17 +210,121 @@ const runPython = async (args: string[]) => {
   return runCommand(python.command, [...python.baseArgs, ...args]);
 };
 
-const runImageMagick = async (args: string[]) => {
-  try {
-    await runCommand("magick", args);
-  } catch (error) {
-    const err = error as NodeJS.ErrnoException;
-    if (err.code === "ENOENT") {
-      await runCommand("convert", args);
-      return;
+const getLibreOfficeCommand = async (): Promise<LibreOfficeCommand | null> => {
+  if (cachedLibreOffice) return cachedLibreOffice;
+  if (resolvingLibreOffice) return resolvingLibreOffice;
+
+  resolvingLibreOffice = (async () => {
+    const envBin =
+      process.env.LIBREOFFICE_BIN?.trim() ||
+      process.env.SOFFICE_BIN?.trim() ||
+      process.env.LIBREOFFICE_PATH?.trim();
+    const candidates: LibreOfficeCommand[] = [];
+    if (envBin) {
+      candidates.push({ command: envBin, baseArgs: [] });
     }
-    throw error;
-  }
+    candidates.push({ command: "soffice", baseArgs: [] });
+    candidates.push({ command: "libreoffice", baseArgs: [] });
+
+    let lastError: unknown;
+    for (const candidate of candidates) {
+      try {
+        await runCommand(candidate.command, [
+          ...candidate.baseArgs,
+          "--version",
+        ]);
+        cachedLibreOffice = candidate;
+        return candidate;
+      } catch (error) {
+        lastError = error;
+        if (!isMissingCommandError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    const hint =
+      lastError instanceof Error && lastError.message
+        ? ` Last error: ${lastError.message}`
+        : "";
+    throw new Error(
+      `LibreOffice not found. Install LibreOffice or set LIBREOFFICE_BIN.${hint}`,
+    );
+  })();
+
+  return resolvingLibreOffice;
+};
+
+const getImageMagickCommand = async (): Promise<ImageMagickCommand> => {
+  if (cachedImageMagick) return cachedImageMagick;
+  if (resolvingImageMagick) return resolvingImageMagick;
+
+  resolvingImageMagick = (async () => {
+    const envBin =
+      process.env.IMAGEMAGICK_BIN?.trim() || process.env.MAGICK_BIN?.trim();
+    const candidates: ImageMagickCommand[] = [];
+    if (envBin) {
+      candidates.push({ command: envBin, baseArgs: [] });
+    }
+
+    if (process.platform === "win32") {
+      candidates.push(
+        { command: "magick", baseArgs: [] },
+        { command: "magick.exe", baseArgs: [] },
+      );
+    } else {
+      candidates.push(
+        { command: "magick", baseArgs: [] },
+        { command: "convert", baseArgs: [] },
+      );
+    }
+
+    let lastError: unknown;
+    for (const candidate of candidates) {
+      try {
+        await runCommand(candidate.command, [
+          ...candidate.baseArgs,
+          "-version",
+        ]);
+        cachedImageMagick = candidate;
+        return candidate;
+      } catch (error) {
+        lastError = error;
+        if (!isMissingCommandError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    const hint =
+      lastError instanceof Error && lastError.message
+        ? ` Last error: ${lastError.message}`
+        : "";
+    throw new Error(
+      `ImageMagick not found. Install ImageMagick or set IMAGEMAGICK_BIN.${hint}`,
+    );
+  })();
+
+  return resolvingImageMagick;
+};
+
+const getXlsxModule = async (): Promise<XlsxModule> => {
+  if (cachedXlsx) return cachedXlsx;
+  if (resolvingXlsx) return resolvingXlsx;
+
+  resolvingXlsx = (async () => {
+    const mod = await import("xlsx");
+    const resolved = (mod.default ?? mod) as XlsxModule;
+    cachedXlsx = resolved;
+    return resolved;
+  })();
+
+  return resolvingXlsx;
+};
+
+const runImageMagick = async (args: string[]) => {
+  const command = await getImageMagickCommand();
+  await runCommand(command.command, [...command.baseArgs, ...args]);
 };
 
 const streamToFile = async (body: unknown, filePath: string) => {
@@ -315,7 +437,9 @@ const convertWithLibreOffice = async (
   outputFormat: string,
   outputDir: string,
 ) => {
-  await runCommand("soffice", [
+  const libreOffice = await getLibreOfficeCommand();
+  await runCommand(libreOffice.command, [
+    ...libreOffice.baseArgs,
     "--headless",
     "--convert-to",
     outputFormat,
@@ -325,6 +449,29 @@ const convertWithLibreOffice = async (
   ]);
   const base = path.basename(inputPath, path.extname(inputPath));
   return path.join(outputDir, `${base}.${outputFormat}`);
+};
+
+const buildDocxFromText = async (textPath: string, outputPath: string) => {
+  const text = await readFile(textPath, "utf8");
+  const lines = text.split(/\r?\n/);
+  const children =
+    lines.length > 0
+      ? lines.map((line) => new Paragraph(line || ""))
+      : [new Paragraph("")];
+  const doc = new Document({
+    sections: [{ children }],
+  });
+  const buffer = await Packer.toBuffer(doc);
+  await writeFile(outputPath, buffer);
+};
+
+const buildXlsxFromLines = async (lines: string[], outputPath: string) => {
+  const XLSX = await getXlsxModule();
+  const data = lines.length > 0 ? lines.map((line) => [line]) : [[""]];
+  const worksheet = XLSX.utils.aoa_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+  XLSX.writeFile(workbook, outputPath);
 };
 
 const ensureExists = async (filePath: string) => {
@@ -508,7 +655,11 @@ const processJob = async (jobId: string) => {
   ) => {
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
     const textPath = await runTesseractToText(input.localPath, outputBase);
-    const docxPath = await convertWithLibreOffice(textPath, "docx", outputDir);
+    const docxPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}.docx`,
+    );
+    await buildDocxFromText(textPath, docxPath);
     await addOutput(docxPath, buildOutputName(input.baseName, "docx"));
   };
 
@@ -518,17 +669,12 @@ const processJob = async (jobId: string) => {
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
     const textPath = await runTesseractToText(input.localPath, outputBase);
     const text = await readFile(textPath, "utf8");
-    const rows = text
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => `"${line.replace(/\"/g, "\"\"")}"`)
-      .join("\n");
-    const csvPath = path.join(
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const xlsxPath = path.join(
       outputDir,
-      `${sanitizeFileName(input.baseName)}.csv`,
+      `${sanitizeFileName(input.baseName)}.xlsx`,
     );
-    await writeFile(csvPath, rows || "\"\"", "utf8");
-    const xlsxPath = await convertWithLibreOffice(csvPath, "xlsx", outputDir);
+    await buildXlsxFromLines(lines, xlsxPath);
     await addOutput(xlsxPath, buildOutputName(input.baseName, "xlsx"));
   };
 
