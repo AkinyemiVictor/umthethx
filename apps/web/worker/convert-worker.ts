@@ -150,7 +150,7 @@ type ImageMagickCommand = {
 let cachedPython: PythonCommand | null = null;
 let resolvingPython: Promise<PythonCommand> | null = null;
 let cachedLibreOffice: LibreOfficeCommand | null = null;
-let resolvingLibreOffice: Promise<LibreOfficeCommand | null> | null = null;
+let resolvingLibreOffice: Promise<LibreOfficeCommand> | null = null;
 let cachedXlsx: XlsxModule | null = null;
 let resolvingXlsx: Promise<XlsxModule> | null = null;
 let cachedImageMagick: ImageMagickCommand | null = null;
@@ -210,7 +210,7 @@ const runPython = async (args: string[]) => {
   return runCommand(python.command, [...python.baseArgs, ...args]);
 };
 
-const getLibreOfficeCommand = async (): Promise<LibreOfficeCommand | null> => {
+const getLibreOfficeCommand = async (): Promise<LibreOfficeCommand> => {
   if (cachedLibreOffice) return cachedLibreOffice;
   if (resolvingLibreOffice) return resolvingLibreOffice;
 
