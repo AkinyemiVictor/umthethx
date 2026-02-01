@@ -1340,6 +1340,9 @@ const processJob = async (jobId: string) => {
     }
     if (images.length === 1) {
       const single = images[0];
+      if (!single) {
+        throw new Error("No pages rendered.");
+      }
       await addOutput(single, `${sanitizeFileName(input.baseName)}.jpg`);
       return;
     }
@@ -1370,6 +1373,9 @@ const processJob = async (jobId: string) => {
     }
     if (images.length === 1) {
       const single = images[0];
+      if (!single) {
+        throw new Error("No pages rendered.");
+      }
       await addOutput(single, `${sanitizeFileName(input.baseName)}.jpg`);
       return;
     }
