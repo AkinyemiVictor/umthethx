@@ -231,13 +231,13 @@ type JsZipFileOptions = {
   date?: Date;
 };
 
-type JsZipModule = {
-  new (): {
-    file: (name: string, data: Buffer, options?: JsZipFileOptions) => void;
-    folder: (name: string) => ReturnType<JsZipModule["new"]>;
-    generateAsync: (options: { type: "nodebuffer" }) => Promise<Buffer>;
-  };
+type JsZipInstance = {
+  file: (name: string, data: Buffer, options?: JsZipFileOptions) => void;
+  folder: (name: string) => JsZipInstance;
+  generateAsync: (options: { type: "nodebuffer" }) => Promise<Buffer>;
 };
+
+type JsZipModule = new () => JsZipInstance;
 
 let cachedPython: PythonCommand | null = null;
 let resolvingPython: Promise<PythonCommand> | null = null;
