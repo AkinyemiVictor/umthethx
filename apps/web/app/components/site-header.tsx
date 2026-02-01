@@ -24,9 +24,15 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const converterGroups = getConverterCategoryGroups(converters);
   const t = useTranslations();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileConvertersOpen, setIsMobileConvertersOpen] = useState(false);
+  const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
   const toggleMobileMenu = () => setIsMobileMenuOpen((prev) => !prev);
+  const toggleMobileConverters = () =>
+    setIsMobileConvertersOpen((prev) => !prev);
+  const toggleMobileGroup = (title: string) =>
+    setOpenMobileGroup((prev) => (prev === title ? null : title));
 
   return (
     <div className="flex flex-col gap-4">
@@ -83,12 +89,6 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
               className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
             >
               {t("header.aiNoteMaker")}
-            </Link>
-            <Link
-              href="/translator"
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
-            >
-              {t("header.translator")}
             </Link>
           </nav>
           <button
@@ -166,16 +166,22 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           </button>
         </div>
         <div className="flex flex-col gap-2 px-4 py-4 text-sm font-semibold text-zinc-700 dark:text-[var(--foreground)]">
-          <label
-            htmlFor={toggleId}
-            onClick={closeMobileMenu}
-            className="inline-flex cursor-pointer items-center justify-between rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
+          <button
+            type="button"
+            onClick={toggleMobileConverters}
+            aria-expanded={isMobileConvertersOpen}
+            className="inline-flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
           >
             <span>{t("header.converters")}</span>
             <svg
               aria-hidden="true"
               viewBox="0 0 20 20"
-              className="h-4 w-4 text-zinc-500 dark:text-[var(--muted-2)]"
+              className={[
+                "h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]",
+                isMobileConvertersOpen ? "rotate-180" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
             >
               <path
                 d="M5 7.5 10 12.5 15 7.5"
@@ -186,20 +192,72 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                 strokeLinejoin="round"
               />
             </svg>
-          </label>
+          </button>
+          {isMobileConvertersOpen ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white/80 p-2 text-xs text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
+              <div className="flex flex-col gap-1">
+                {converterGroups.map((group) => {
+                  const isOpen = openMobileGroup === group.title;
+                  return (
+                    <div key={group.title}>
+                      <button
+                        type="button"
+                        onClick={() => toggleMobileGroup(group.title)}
+                        aria-expanded={isOpen}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold text-zinc-800 transition hover:bg-[var(--brand-50)] dark:text-[var(--foreground)]"
+                      >
+                        <span>{group.title}</span>
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className={[
+                            "h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]",
+                            isOpen ? "rotate-180" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <path
+                            d="M5 7.5 10 12.5 15 7.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                      {isOpen ? (
+                        <div className="mt-1 space-y-1 rounded-xl bg-white px-3 py-2 dark:bg-[var(--surface-3)]">
+                          {group.items.map((converter) => (
+                            <Link
+                              key={converter.slug}
+                              href={getConverterHref(converter)}
+                              onClick={closeMobileMenu}
+                              className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs text-zinc-600 transition hover:bg-[var(--brand-50)] hover:text-zinc-900 dark:text-[var(--muted)] dark:hover:text-[var(--foreground)]"
+                            >
+                              <span className="truncate">
+                                {converter.title}
+                              </span>
+                              <span className="ml-2 text-[10px] text-zinc-400">
+                                {converter.outputFormat.toUpperCase()}
+                              </span>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           <Link
             href="/ai-notemaker"
             onClick={closeMobileMenu}
             className="inline-flex items-center rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
           >
             {t("header.aiNoteMaker")}
-          </Link>
-          <Link
-            href="/translator"
-            onClick={closeMobileMenu}
-            className="inline-flex items-center rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
-          >
-            {t("header.translator")}
           </Link>
         </div>
       </div>
