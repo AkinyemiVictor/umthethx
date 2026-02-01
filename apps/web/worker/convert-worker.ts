@@ -677,36 +677,10 @@ const getCanvasModule = async (): Promise<CanvasModule> => {
       cachedCanvas = resolved;
       return resolved;
     } catch (error) {
-      try {
-        const mod = (await import("canvas")) as unknown;
-        const resolved = (() => {
-          if (mod && typeof mod === "object" && "createCanvas" in mod) {
-            return mod as CanvasModule;
-          }
-          if (
-            mod &&
-            typeof mod === "object" &&
-            "default" in mod &&
-            (mod as { default?: CanvasModule }).default?.createCanvas
-          ) {
-            return (mod as { default: CanvasModule }).default;
-          }
-          return null;
-        })();
-        if (!resolved) {
-          throw new Error("canvas createCanvas export not found.");
-        }
-        cachedCanvas = resolved;
-        return resolved;
-      } catch (fallbackError) {
-        const message =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : "Unknown error.";
-        throw new Error(
-          `Canvas not available. Install @napi-rs/canvas or Poppler. ${message}`,
-        );
-      }
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(
+        `Canvas not available. Install @napi-rs/canvas or Poppler. ${message}`,
+      );
     }
   })();
 
