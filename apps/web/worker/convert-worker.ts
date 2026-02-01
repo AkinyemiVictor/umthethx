@@ -131,6 +131,16 @@ const isMissingCommandError = (error: unknown) => {
   return message.toLowerCase().includes("enoent") || message.toLowerCase().includes("not found");
 };
 
+const isMissingModuleError = (error: unknown) => {
+  if (!error || typeof error !== "object") return false;
+  const err = error as NodeJS.ErrnoException & { code?: string };
+  if (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND") {
+    return true;
+  }
+  const message = typeof err.message === "string" ? err.message : "";
+  return message.toLowerCase().includes("cannot find module");
+};
+
 type PythonCommand = {
   command: string;
   baseArgs: string[];
@@ -147,6 +157,75 @@ type ImageMagickCommand = {
   baseArgs: string[];
 };
 
+type JimpImage = {
+  writeAsync: (path: string) => Promise<void>;
+  quality?: (value: number) => JimpImage;
+  background?: (value: number) => JimpImage;
+};
+
+type JimpModule = {
+  read: (path: string | Buffer) => Promise<JimpImage>;
+};
+
+type HeicDecodeImage = {
+  data: ArrayBuffer | Uint8Array | Uint8ClampedArray;
+  width: number;
+  height: number;
+};
+
+type HeicDecodeResult = HeicDecodeImage | HeicDecodeImage[] | { images: HeicDecodeImage[] };
+
+type HeicDecodeFn = (options: {
+  buffer: Buffer | Uint8Array;
+}) => Promise<HeicDecodeResult> | HeicDecodeResult;
+
+type JpegModule = {
+  encode: (
+    image: { data: Uint8Array; width: number; height: number },
+    quality: number,
+  ) => { data: Buffer };
+};
+
+type ResvgRender = {
+  asPng: () => Uint8Array;
+};
+
+type ResvgInstance = {
+  render: () => ResvgRender;
+};
+
+type ResvgModule = {
+  Resvg: new (svg: string, options?: { fitTo?: { mode: "original" } }) => ResvgInstance;
+};
+
+type PdfJsDocument = {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<{
+    getViewport: (options: { scale: number }) => { width: number; height: number };
+    render: (options: {
+      canvasContext: CanvasRenderingContext2D;
+      viewport: { width: number; height: number };
+    }) => { promise: Promise<void> };
+  }>;
+  cleanup?: () => void;
+};
+
+type PdfJsLoadingTask = {
+  promise: Promise<PdfJsDocument>;
+  destroy?: () => Promise<void>;
+};
+
+type PdfJsModule = {
+  getDocument: (options: { data: Uint8Array | Buffer; disableWorker?: boolean }) => PdfJsLoadingTask;
+};
+
+type CanvasModule = {
+  createCanvas: (width: number, height: number) => {
+    getContext: (contextId: "2d") => CanvasRenderingContext2D | null;
+    toBuffer: (type: "image/jpeg", options?: { quality?: number }) => Buffer;
+  };
+};
+
 let cachedPython: PythonCommand | null = null;
 let resolvingPython: Promise<PythonCommand> | null = null;
 let cachedLibreOffice: LibreOfficeCommand | null = null;
@@ -155,6 +234,18 @@ let cachedXlsx: XlsxModule | null = null;
 let resolvingXlsx: Promise<XlsxModule> | null = null;
 let cachedImageMagick: ImageMagickCommand | null = null;
 let resolvingImageMagick: Promise<ImageMagickCommand> | null = null;
+let cachedJimp: JimpModule | null = null;
+let resolvingJimp: Promise<JimpModule> | null = null;
+let cachedHeicDecode: HeicDecodeFn | null = null;
+let resolvingHeicDecode: Promise<HeicDecodeFn> | null = null;
+let cachedJpegModule: JpegModule | null = null;
+let resolvingJpegModule: Promise<JpegModule> | null = null;
+let cachedResvg: ResvgModule | null = null;
+let resolvingResvg: Promise<ResvgModule> | null = null;
+let cachedPdfjs: PdfJsModule | null = null;
+let resolvingPdfjs: Promise<PdfJsModule> | null = null;
+let cachedCanvas: CanvasModule | null = null;
+let resolvingCanvas: Promise<CanvasModule> | null = null;
 
 const getPythonCommand = async (): Promise<PythonCommand> => {
   if (cachedPython) return cachedPython;
@@ -327,6 +418,400 @@ const runImageMagick = async (args: string[]) => {
   await runCommand(command.command, [...command.baseArgs, ...args]);
 };
 
+const resolveJimpModule = (mod: unknown): JimpModule | null => {
+  if (!mod || typeof mod !== "object") return null;
+  const candidate = mod as {
+    default?: JimpModule;
+    Jimp?: JimpModule;
+  };
+  if (candidate.default?.read) return candidate.default;
+  if (candidate.Jimp?.read) return candidate.Jimp;
+  if ((mod as JimpModule).read) return mod as JimpModule;
+  return null;
+};
+
+const getJimpModule = async (): Promise<JimpModule> => {
+  if (cachedJimp) return cachedJimp;
+  if (resolvingJimp) return resolvingJimp;
+
+  resolvingJimp = (async () => {
+    try {
+      const mod = await import("jimp");
+      const resolved = resolveJimpModule(mod);
+      if (!resolved) {
+        throw new Error("Jimp module does not expose read().");
+      }
+      cachedJimp = resolved;
+      return resolved;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(
+        `Jimp not available. Install the jimp dependency or ImageMagick. ${message}`,
+      );
+    }
+  })();
+
+  return resolvingJimp;
+};
+
+const isImageMagickUnavailable = (error: unknown) => {
+  if (isMissingCommandError(error)) return true;
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("imagemagick not found")) return true;
+  if (process.platform === "win32" && message.includes("convert failed")) {
+    // Windows ships convert.exe, which isn't ImageMagick and returns "Invalid Parameter".
+    return true;
+  }
+  return false;
+};
+
+const canJimpConvert = (inputExt: string, outputExt: string) => {
+  const supported = new Set(["jpg", "jpeg", "png"]);
+  return supported.has(inputExt) && supported.has(outputExt);
+};
+
+const runJimpConvert = async (inputPath: string, outputPath: string) => {
+  const jimp = await getJimpModule();
+  const image = await jimp.read(inputPath);
+  const outputExt = path.extname(outputPath).slice(1).toLowerCase();
+  if (outputExt === "jpg" || outputExt === "jpeg") {
+    image.background?.(0xffffffff);
+    image.quality?.(90);
+  }
+  await image.writeAsync(outputPath);
+};
+
+const resolveHeicDecode = (mod: unknown): HeicDecodeFn | null => {
+  if (!mod) return null;
+  if (typeof mod === "function") return mod as HeicDecodeFn;
+  if (typeof mod !== "object") return null;
+  const candidate = mod as {
+    decode?: HeicDecodeFn;
+    default?: { decode?: HeicDecodeFn } | HeicDecodeFn;
+  };
+  if (candidate.decode) return candidate.decode;
+  if (typeof candidate.default === "function") {
+    return candidate.default as HeicDecodeFn;
+  }
+  if (candidate.default && "decode" in candidate.default) {
+    return (candidate.default as { decode?: HeicDecodeFn }).decode ?? null;
+  }
+  return null;
+};
+
+const getHeicDecode = async (): Promise<HeicDecodeFn> => {
+  if (cachedHeicDecode) return cachedHeicDecode;
+  if (resolvingHeicDecode) return resolvingHeicDecode;
+
+  resolvingHeicDecode = (async () => {
+    try {
+      const mod = await import("heic-decode");
+      const resolved = resolveHeicDecode(mod);
+      if (!resolved) {
+        throw new Error("heic-decode does not expose decode().");
+      }
+      cachedHeicDecode = resolved;
+      return resolved;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(
+        `HEIC decoder not available. Install heic-decode or ImageMagick. ${message}`,
+      );
+    }
+  })();
+
+  return resolvingHeicDecode;
+};
+
+const resolveJpegModule = (mod: unknown): JpegModule | null => {
+  if (!mod || typeof mod !== "object") return null;
+  const candidate = mod as {
+    default?: JpegModule;
+    encode?: JpegModule["encode"];
+  };
+  if (candidate.encode) return { encode: candidate.encode };
+  if (candidate.default?.encode) return candidate.default;
+  return null;
+};
+
+const getJpegModule = async (): Promise<JpegModule> => {
+  if (cachedJpegModule) return cachedJpegModule;
+  if (resolvingJpegModule) return resolvingJpegModule;
+
+  resolvingJpegModule = (async () => {
+    try {
+      const mod = await import("jpeg-js");
+      const resolved = resolveJpegModule(mod);
+      if (!resolved) {
+        throw new Error("jpeg-js does not expose encode().");
+      }
+      cachedJpegModule = resolved;
+      return resolved;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(
+        `JPEG encoder not available. Install jpeg-js or ImageMagick. ${message}`,
+      );
+    }
+  })();
+
+  return resolvingJpegModule;
+};
+
+const getResvgModule = async (): Promise<ResvgModule> => {
+  if (cachedResvg) return cachedResvg;
+  if (resolvingResvg) return resolvingResvg;
+
+  resolvingResvg = (async () => {
+    try {
+      const mod = await import("@resvg/resvg-js");
+      const candidate = mod as { Resvg?: ResvgModule["Resvg"] };
+      if (!candidate.Resvg) {
+        throw new Error("Resvg export not found.");
+      }
+      const resolved: ResvgModule = { Resvg: candidate.Resvg };
+      cachedResvg = resolved;
+      return resolved;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(
+        `Resvg not available. Install @resvg/resvg-js or rsvg-convert. ${message}`,
+      );
+    }
+  })();
+
+  return resolvingResvg;
+};
+
+const getPdfjsModule = async (): Promise<PdfJsModule> => {
+  if (cachedPdfjs) return cachedPdfjs;
+  if (resolvingPdfjs) return resolvingPdfjs;
+
+  resolvingPdfjs = (async () => {
+    const candidates = [
+      "pdfjs-dist/legacy/build/pdf.mjs",
+      "pdfjs-dist/legacy/build/pdf.js",
+      "pdfjs-dist/build/pdf.mjs",
+      "pdfjs-dist/build/pdf.js",
+    ];
+
+    let lastError: unknown;
+    for (const specifier of candidates) {
+      try {
+        const mod = (await import(specifier)) as unknown;
+        const resolved = (() => {
+          if (mod && typeof mod === "object" && "getDocument" in mod) {
+            return mod as PdfJsModule;
+          }
+          if (
+            mod &&
+            typeof mod === "object" &&
+            "default" in mod &&
+            (mod as { default?: PdfJsModule }).default?.getDocument
+          ) {
+            return (mod as { default: PdfJsModule }).default;
+          }
+          return null;
+        })();
+        if (!resolved) {
+          throw new Error(`pdfjs getDocument export not found in ${specifier}.`);
+        }
+        cachedPdfjs = resolved;
+        return resolved;
+      } catch (error) {
+        lastError = error;
+        if (!isMissingModuleError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    const message = lastError instanceof Error ? lastError.message : "Unknown error.";
+    throw new Error(
+      `pdfjs-dist not available. Install pdfjs-dist or Poppler. ${message}`,
+    );
+  })();
+
+  return resolvingPdfjs;
+};
+
+const getCanvasModule = async (): Promise<CanvasModule> => {
+  if (cachedCanvas) return cachedCanvas;
+  if (resolvingCanvas) return resolvingCanvas;
+
+  resolvingCanvas = (async () => {
+    try {
+      const mod = (await import("@napi-rs/canvas")) as unknown;
+      const resolved = (() => {
+        if (mod && typeof mod === "object" && "createCanvas" in mod) {
+          return mod as CanvasModule;
+        }
+        if (
+          mod &&
+          typeof mod === "object" &&
+          "default" in mod &&
+          (mod as { default?: CanvasModule }).default?.createCanvas
+        ) {
+          return (mod as { default: CanvasModule }).default;
+        }
+        return null;
+      })();
+      if (!resolved) {
+        throw new Error("@napi-rs/canvas createCanvas export not found.");
+      }
+      cachedCanvas = resolved;
+      return resolved;
+    } catch (error) {
+      try {
+        const mod = (await import("canvas")) as unknown;
+        const resolved = (() => {
+          if (mod && typeof mod === "object" && "createCanvas" in mod) {
+            return mod as CanvasModule;
+          }
+          if (
+            mod &&
+            typeof mod === "object" &&
+            "default" in mod &&
+            (mod as { default?: CanvasModule }).default?.createCanvas
+          ) {
+            return (mod as { default: CanvasModule }).default;
+          }
+          return null;
+        })();
+        if (!resolved) {
+          throw new Error("canvas createCanvas export not found.");
+        }
+        cachedCanvas = resolved;
+        return resolved;
+      } catch (fallbackError) {
+        const message =
+          fallbackError instanceof Error
+            ? fallbackError.message
+            : "Unknown error.";
+        throw new Error(
+          `Canvas not available. Install @napi-rs/canvas or Poppler. ${message}`,
+        );
+      }
+    }
+  })();
+
+  return resolvingCanvas;
+};
+
+const isHeicDecodeImage = (value: unknown): value is HeicDecodeImage => {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as {
+    data?: unknown;
+    width?: unknown;
+    height?: unknown;
+  };
+  const hasData =
+    candidate.data instanceof ArrayBuffer ||
+    candidate.data instanceof Uint8Array ||
+    candidate.data instanceof Uint8ClampedArray;
+  return (
+    hasData &&
+    typeof candidate.width === "number" &&
+    typeof candidate.height === "number"
+  );
+};
+
+const pickHeicImage = (result: HeicDecodeResult): HeicDecodeImage => {
+  if (Array.isArray(result)) {
+    const first = result.find(isHeicDecodeImage);
+    if (first) return first;
+  } else if (result && typeof result === "object" && "images" in result) {
+    const images = (result as { images?: HeicDecodeImage[] }).images;
+    if (Array.isArray(images) && images.length > 0 && isHeicDecodeImage(images[0])) {
+      return images[0];
+    }
+  } else if (isHeicDecodeImage(result)) {
+    return result;
+  }
+  throw new Error("Unable to read HEIC image data.");
+};
+
+const runHeicToJpeg = async (inputPath: string, outputPath: string) => {
+  const buffer = await readFile(inputPath);
+  const decode = await getHeicDecode();
+  const decoded = await decode({ buffer });
+  const image = pickHeicImage(decoded);
+  const jpeg = await getJpegModule();
+  const rawData =
+    image.data instanceof ArrayBuffer
+      ? new Uint8Array(image.data)
+      : image.data;
+  const data = Buffer.from(rawData);
+  const encoded = jpeg.encode(
+    { data, width: image.width, height: image.height },
+    90,
+  );
+  await writeFile(outputPath, encoded.data);
+};
+
+const runSvgToPng = async (inputPath: string, outputPath: string) => {
+  try {
+    await runCommand("rsvg-convert", ["-f", "png", "-o", outputPath, inputPath]);
+    return;
+  } catch (error) {
+    if (!isMissingCommandError(error)) {
+      throw error;
+    }
+  }
+
+  try {
+    const svgSource = await readFile(inputPath, "utf8");
+    const { Resvg } = await getResvgModule();
+    const resvg = new Resvg(svgSource, { fitTo: { mode: "original" } });
+    const png = resvg.render().asPng();
+    await writeFile(outputPath, Buffer.from(png));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error.";
+    throw new Error(`rsvg-convert not found and resvg fallback failed: ${message}`);
+  }
+};
+
+const runImageConvert = async (inputPath: string, outputPath: string) => {
+  try {
+    await runImageMagick([inputPath, outputPath]);
+    return;
+  } catch (error) {
+    if (!isImageMagickUnavailable(error)) {
+      throw error;
+    }
+  }
+
+  const inputExt = path.extname(inputPath).slice(1).toLowerCase();
+  const outputExt = path.extname(outputPath).slice(1).toLowerCase();
+  if (canJimpConvert(inputExt, outputExt)) {
+    try {
+      await runJimpConvert(inputPath, outputPath);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(`ImageMagick not found and Jimp fallback failed: ${message}`);
+    }
+  }
+
+  if (inputExt === "heic" && (outputExt === "jpg" || outputExt === "jpeg")) {
+    try {
+      await runHeicToJpeg(inputPath, outputPath);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(
+        `ImageMagick not found and HEIC fallback failed: ${message}`,
+      );
+    }
+  }
+
+  if (!canJimpConvert(inputExt, outputExt)) {
+    throw new Error(
+      `ImageMagick not found. Install ImageMagick to convert ${inputExt.toUpperCase()} to ${outputExt.toUpperCase()}.`,
+    );
+  }
+};
+
 const streamToFile = async (body: unknown, filePath: string) => {
   if (!body) throw new Error("Missing S3 body.");
   if (body instanceof Readable) {
@@ -493,11 +978,59 @@ const runPdfToImages = async (
   base: string,
 ) => {
   const prefix = path.join(outputDir, base);
-  await runCommand("pdftoppm", ["-jpeg", inputPath, prefix]);
-  const files = await readdir(outputDir);
-  return files
-    .filter((file) => file.startsWith(`${base}-`) && file.endsWith(".jpg"))
-    .map((file) => path.join(outputDir, file));
+  try {
+    await runCommand("pdftoppm", ["-jpeg", inputPath, prefix]);
+    const files = await readdir(outputDir);
+    return files
+      .filter((file) => file.startsWith(`${base}-`) && file.endsWith(".jpg"))
+      .map((file) => path.join(outputDir, file));
+  } catch (error) {
+    if (!isMissingCommandError(error)) {
+      throw error;
+    }
+  }
+
+  try {
+    const pdfjs = await getPdfjsModule();
+    const { createCanvas } = await getCanvasModule();
+    const data = await readFile(inputPath);
+    const loadingTask = pdfjs.getDocument({
+      data: data instanceof Uint8Array ? data : new Uint8Array(data),
+      disableWorker: true,
+    });
+    const pdf = await loadingTask.promise;
+    const results: string[] = [];
+    const scale = 2;
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+      const canvas = createCanvas(viewport.width, viewport.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("Unable to create 2D canvas context.");
+      }
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const outputPath = path.join(outputDir, `${base}-${pageNumber}.jpg`);
+      const buffer = canvas.toBuffer("image/jpeg", { quality: 0.92 });
+      await writeFile(outputPath, buffer);
+      results.push(outputPath);
+    }
+
+    if (typeof pdf.cleanup === "function") {
+      pdf.cleanup();
+    }
+    if (typeof loadingTask.destroy === "function") {
+      await loadingTask.destroy();
+    }
+
+    return results;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error.";
+    throw new Error(
+      `pdftoppm not found and pdfjs fallback failed: ${message}`,
+    );
+  }
 };
 
 const runPdfToHtml = async (inputPath: string, outputDir: string) => {
@@ -786,7 +1319,7 @@ const processJob = async (jobId: string) => {
       outputDir,
       `${sanitizeFileName(input.baseName)}.${format}`,
     );
-    await runImageMagick([input.localPath, outputPath]);
+    await runImageConvert(input.localPath, outputPath);
     await addOutput(outputPath, buildOutputName(input.baseName, format));
   };
 
@@ -797,7 +1330,7 @@ const processJob = async (jobId: string) => {
       outputDir,
       `${sanitizeFileName(input.baseName)}.png`,
     );
-    await runCommand("rsvg-convert", ["-f", "png", "-o", outputPath, input.localPath]);
+    await runSvgToPng(input.localPath, outputPath);
     await addOutput(outputPath, buildOutputName(input.baseName, "png"));
   };
 
