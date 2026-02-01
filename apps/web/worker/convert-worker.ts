@@ -85,12 +85,13 @@ const getContentType = (filePath: string) => {
 const runCommand = (
   command: string,
   args: string[],
-  options: { cwd?: string } = {},
+  options: { cwd?: string; windowsHide?: boolean } = {},
 ) =>
   new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: options.windowsHide ?? false,
     });
     let stdout = "";
     let stderr = "";
@@ -226,6 +227,18 @@ type CanvasModule = {
   };
 };
 
+type JsZipFileOptions = {
+  date?: Date;
+};
+
+type JsZipModule = {
+  new (): {
+    file: (name: string, data: Buffer, options?: JsZipFileOptions) => void;
+    folder: (name: string) => ReturnType<JsZipModule["new"]>;
+    generateAsync: (options: { type: "nodebuffer" }) => Promise<Buffer>;
+  };
+};
+
 let cachedPython: PythonCommand | null = null;
 let resolvingPython: Promise<PythonCommand> | null = null;
 let cachedLibreOffice: LibreOfficeCommand | null = null;
@@ -246,6 +259,8 @@ let cachedPdfjs: PdfJsModule | null = null;
 let resolvingPdfjs: Promise<PdfJsModule> | null = null;
 let cachedCanvas: CanvasModule | null = null;
 let resolvingCanvas: Promise<CanvasModule> | null = null;
+let cachedJsZip: JsZipModule | null = null;
+let resolvingJsZip: Promise<JsZipModule> | null = null;
 
 const getPythonCommand = async (): Promise<PythonCommand> => {
   if (cachedPython) return cachedPython;
@@ -698,6 +713,41 @@ const getCanvasModule = async (): Promise<CanvasModule> => {
   return resolvingCanvas;
 };
 
+const getJsZipModule = async (): Promise<JsZipModule> => {
+  if (cachedJsZip) return cachedJsZip;
+  if (resolvingJsZip) return resolvingJsZip;
+
+  resolvingJsZip = (async () => {
+    try {
+      const mod = (await import("jszip")) as unknown;
+      const resolved = (() => {
+        if (typeof mod === "function") {
+          return mod as JsZipModule;
+        }
+        if (
+          mod &&
+          typeof mod === "object" &&
+          "default" in mod &&
+          typeof (mod as { default?: unknown }).default === "function"
+        ) {
+          return (mod as { default: JsZipModule }).default;
+        }
+        return null;
+      })();
+      if (!resolved) {
+        throw new Error("jszip export not found.");
+      }
+      cachedJsZip = resolved;
+      return resolved;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error.";
+      throw new Error(`jszip not available. Install jszip. ${message}`);
+    }
+  })();
+
+  return resolvingJsZip;
+};
+
 const isHeicDecodeImage = (value: unknown): value is HeicDecodeImage => {
   if (!value || typeof value !== "object") return false;
   const candidate = value as {
@@ -925,13 +975,17 @@ const convertWithLibreOffice = async (
   const libreOffice = await getLibreOfficeCommand();
   await runCommand(libreOffice.command, [
     ...libreOffice.baseArgs,
+    "--nologo",
+    "--nolockcheck",
+    "--norestore",
+    "--invisible",
     "--headless",
     "--convert-to",
     outputFormat,
     "--outdir",
     outputDir,
     inputPath,
-  ]);
+  ], { windowsHide: true });
   const base = path.basename(inputPath, path.extname(inputPath));
   return path.join(outputDir, `${base}.${outputFormat}`);
 };
@@ -965,11 +1019,60 @@ const ensureExists = async (filePath: string) => {
 };
 
 const zipFiles = async (zipPath: string, files: string[]) => {
-  await runCommand("zip", ["-j", zipPath, ...files]);
+  try {
+    await runCommand("zip", ["-j", zipPath, ...files]);
+    return;
+  } catch (error) {
+    if (!isMissingCommandError(error)) {
+      throw error;
+    }
+  }
+
+  const JsZip = await getJsZipModule();
+  const zip = new JsZip();
+  await Promise.all(
+    files.map(async (filePath) => {
+      const data = await readFile(filePath);
+      zip.file(path.basename(filePath), data);
+    }),
+  );
+  const buffer = await zip.generateAsync({ type: "nodebuffer" });
+  await writeFile(zipPath, buffer);
 };
 
 const zipDirectory = async (zipPath: string, dirPath: string) => {
-  await runCommand("zip", ["-r", zipPath, "."], { cwd: dirPath });
+  try {
+    await runCommand("zip", ["-r", zipPath, "."], { cwd: dirPath });
+    return;
+  } catch (error) {
+    if (!isMissingCommandError(error)) {
+      throw error;
+    }
+  }
+
+  const JsZip = await getJsZipModule();
+  const zip = new JsZip();
+  const base = path.resolve(dirPath);
+  const walk = async (currentDir: string) => {
+    const entries = await readdir(currentDir, { withFileTypes: true });
+    await Promise.all(
+      entries.map(async (entry) => {
+        const entryPath = path.join(currentDir, entry.name);
+        const relPath = path
+          .relative(base, entryPath)
+          .replace(/\\/g, "/");
+        if (entry.isDirectory()) {
+          await walk(entryPath);
+        } else if (entry.isFile()) {
+          const data = await readFile(entryPath);
+          zip.file(relPath, data);
+        }
+      }),
+    );
+  };
+  await walk(base);
+  const buffer = await zip.generateAsync({ type: "nodebuffer" });
+  await writeFile(zipPath, buffer);
 };
 
 const runPdfToImages = async (
@@ -1261,6 +1364,11 @@ const processJob = async (jobId: string) => {
     if (images.length === 0) {
       throw new Error("No pages rendered.");
     }
+    if (images.length === 1) {
+      const single = images[0];
+      await addOutput(single, `${sanitizeFileName(input.baseName)}.jpg`);
+      return;
+    }
     const zipPath = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}-pages.zip`,
@@ -1285,6 +1393,11 @@ const processJob = async (jobId: string) => {
     const images = await runPdfToImages(pdfPath, pageDir, "page");
     if (images.length === 0) {
       throw new Error("No pages rendered.");
+    }
+    if (images.length === 1) {
+      const single = images[0];
+      await addOutput(single, `${sanitizeFileName(input.baseName)}.jpg`);
+      return;
     }
     const zipPath = path.join(
       outputDir,

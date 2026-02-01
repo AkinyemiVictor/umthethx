@@ -21,6 +21,7 @@
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
     "bullmq": "^5.66.4",
+    "jszip": "^3.10.1",
     "docx": "^9.5.1",
     "dotenv": "^16.6.1",
     "heic-decode": "^1.1.0",
