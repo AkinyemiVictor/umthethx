@@ -71,7 +71,11 @@ export default async function Home() {
         </div>
 
         {showAds ? (
-          <AdSlot slot="home-inline" className="min-h-[140px]">
+          <AdSlot
+            slot="home-inline"
+            className="min-h-[140px]"
+            label={t("ads.label")}
+          >
             {t("ads.text")}
           </AdSlot>
         ) : null}
@@ -117,7 +121,11 @@ export default async function Home() {
         />
 
         {showAds ? (
-          <AdSlot slot="home-footer" className="min-h-[140px]">
+          <AdSlot
+            slot="home-footer"
+            className="min-h-[140px]"
+            label={t("ads.label")}
+          >
             {t("ads.text")}
           </AdSlot>
         ) : null}

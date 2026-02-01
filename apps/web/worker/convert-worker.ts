@@ -1354,6 +1354,66 @@ const processJob = async (jobId: string) => {
     await addOutput(zipPath, `${sanitizeFileName(input.baseName)}-pages.zip`);
   };
 
+  const handlePdfSplit = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const bytes = await readFile(input.localPath);
+    const pdfDoc = await PDFDocument.load(bytes);
+    const pageCount = pdfDoc.getPageCount();
+    if (pageCount === 0) {
+      throw new Error("No pages found.");
+    }
+    if (pageCount === 1) {
+      const singleDoc = await PDFDocument.create();
+      const [page] = await singleDoc.copyPages(pdfDoc, [0]);
+      if (!page) {
+        throw new Error("No pages found.");
+      }
+      singleDoc.addPage(page);
+      const outputPath = path.join(
+        outputDir,
+        `${sanitizeFileName(input.baseName)}.pdf`,
+      );
+      const pdfBytes = await singleDoc.save();
+      await writeFile(outputPath, pdfBytes);
+      await addOutput(outputPath, buildOutputName(input.baseName, "pdf"));
+      return;
+    }
+
+    const pageDir = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}-pages`,
+    );
+    await ensureDir(pageDir);
+    const pageFiles: string[] = [];
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const splitDoc = await PDFDocument.create();
+      const [page] = await splitDoc.copyPages(pdfDoc, [pageIndex]);
+      if (!page) {
+        continue;
+      }
+      splitDoc.addPage(page);
+      const outputPath = path.join(
+        pageDir,
+        `${sanitizeFileName(input.baseName)}-page-${pageIndex + 1}.pdf`,
+      );
+      const pdfBytes = await splitDoc.save();
+      await writeFile(outputPath, pdfBytes);
+      pageFiles.push(outputPath);
+    }
+
+    if (pageFiles.length === 0) {
+      throw new Error("No pages split.");
+    }
+
+    const zipPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}-pages.zip`,
+    );
+    await zipFiles(zipPath, pageFiles);
+    await addOutput(zipPath, `${sanitizeFileName(input.baseName)}-pages.zip`);
+  };
+
   const handleOfficeToJpg = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
@@ -1523,6 +1583,9 @@ const processJob = async (jobId: string) => {
           }
           case "pdf-to-jpg":
             await handlePdfToJpg(input);
+            break;
+          case "split-pdf":
+            await handlePdfSplit(input);
             break;
           case "word-to-jpg":
           case "excel-to-jpg":

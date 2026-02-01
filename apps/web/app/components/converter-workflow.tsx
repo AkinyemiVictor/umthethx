@@ -549,7 +549,7 @@ export function ConverterWorkflow({
             <p className="mt-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
               {formatLine}
             </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-5 flex flex-col items-center justify-center gap-2">
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"

@@ -59,7 +59,7 @@ export default async function TranslatorPage() {
               </p>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {steps.map((step) => (
               <div
                 key={step.title}

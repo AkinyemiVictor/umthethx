@@ -251,6 +251,16 @@ export const converters: ConverterDefinition[] = [
     engineHint: "pdf-merge",
   }),
   defineConverter({
+    slug: "split-pdf",
+    title: "Split PDF",
+    description: "Split a PDF into separate pages.",
+    categoryTags: ["pdf", "split"],
+    acceptExtensions: ["pdf"],
+    outputFormat: "pdf",
+    jobType: "convert",
+    engineHint: "pdf-split",
+  }),
+  defineConverter({
     slug: "word-to-jpg",
     title: "Word to JPG",
     description: "Render documents as images.",
@@ -433,7 +443,7 @@ export const converterCategories: ConverterCategory[] = [
     title: "PDF Tools",
     description: "Manage and organize PDF files.",
     icon: "pdf-tools",
-    converterSlugs: ["merge-pdf"],
+    converterSlugs: ["merge-pdf", "split-pdf"],
   },
   {
     title: "Data Tools",

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { FileChip } from "@repo/ui/file-chip";
 import type { Converter } from "../lib/converters";
 import { ConverterCategoryIcon } from "./converter-category-icon";
@@ -22,6 +23,10 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleId = "converter-toggle";
   const converterGroups = getConverterCategoryGroups(converters);
   const t = useTranslations();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const toggleMobileMenu = () => setIsMobileMenuOpen((prev) => !prev);
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,13 +55,123 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           />
           <span className="sr-only">Umthethx</span>
         </Link>
-        <nav className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] sm:gap-6 sm:text-sm">
+        <div className="flex items-center gap-2 sm:gap-6">
           <ThemeToggle />
+          <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[740px]:flex min-[740px]:gap-6 min-[740px]:text-sm">
+            <label
+              htmlFor={toggleId}
+              className="inline-flex cursor-pointer list-none items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+            >
+              {t("header.converters")}
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                className="h-4 w-4 text-zinc-500 dark:text-[var(--muted-2)]"
+              >
+                <path
+                  d="M5 7.5 10 12.5 15 7.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </label>
+            <Link
+              href="/ai-notemaker"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+            >
+              {t("header.aiNoteMaker")}
+            </Link>
+            <Link
+              href="/translator"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+            >
+              {t("header.translator")}
+            </Link>
+          </nav>
+          <button
+            type="button"
+            aria-controls="mobile-menu"
+            aria-expanded={isMobileMenuOpen}
+            onClick={toggleMobileMenu}
+            className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white p-2 text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] min-[740px]:hidden"
+          >
+            <span className="sr-only">{t("header.toggleMenu")}</span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+            >
+              <path
+                d="M4 7h16M4 12h16M4 17h16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      {isMobileMenuOpen ? (
+        <button
+          type="button"
+          aria-hidden="true"
+          onClick={closeMobileMenu}
+          className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-sm min-[740px]:hidden"
+        />
+      ) : null}
+
+      <div
+        id="mobile-menu"
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!isMobileMenuOpen}
+        className={[
+          "fixed inset-y-0 right-0 z-[100] w-72 max-w-[85vw] border-l border-zinc-200 bg-white/95 shadow-xl shadow-black/20 backdrop-blur transition-transform duration-300 ease-out dark:border-[var(--border-2)] dark:bg-[var(--surface-1)]",
+          isMobileMenuOpen
+            ? "translate-x-0"
+            : "translate-x-full pointer-events-none",
+          "min-[740px]:hidden",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-4 dark:border-[var(--border-2)]">
+          <span className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+            Umthethx
+          </span>
+          <button
+            type="button"
+            onClick={closeMobileMenu}
+            aria-label={t("header.toggleMenu")}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 text-zinc-600 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:border-[var(--border-2)] dark:text-[var(--foreground)]"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex flex-col gap-2 px-4 py-4 text-sm font-semibold text-zinc-700 dark:text-[var(--foreground)]">
           <label
             htmlFor={toggleId}
-            className="inline-flex cursor-pointer list-none items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+            onClick={closeMobileMenu}
+            className="inline-flex cursor-pointer items-center justify-between rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
           >
-            {t("header.converters")}
+            <span>{t("header.converters")}</span>
             <svg
               aria-hidden="true"
               viewBox="0 0 20 20"
@@ -74,18 +189,20 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           </label>
           <Link
             href="/ai-notemaker"
-            className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+            onClick={closeMobileMenu}
+            className="inline-flex items-center rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
           >
             {t("header.aiNoteMaker")}
           </Link>
           <Link
             href="/translator"
-            className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+            onClick={closeMobileMenu}
+            className="inline-flex items-center rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
           >
             {t("header.translator")}
           </Link>
-        </nav>
-      </header>
+        </div>
+      </div>
 
       <div
         id="converter-panel"
@@ -105,7 +222,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                 <p className="mt-1 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
                   {group.description}
                 </p>
-                <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {group.items.map((converter) => {
                     const isActive = converter.slug === currentSlug;
                     return (

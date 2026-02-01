@@ -56,7 +56,7 @@ export function ConverterGrid({
                 {group.description}
               </p>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {group.items.map((item) => {
                 const isActive = item.slug === currentSlug;
                 return (
