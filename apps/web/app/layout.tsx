@@ -16,7 +16,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Umthethx",
+  title: "umthethx | online ocr converter",
   description:
     "Free, ad-supported online file converter for images, documents, and more.",
   icons: {
@@ -25,6 +25,7 @@ export const metadata: Metadata = {
       { url: "/favicon/favicon.png", type: "image/png" },
     ],
     shortcut: ["/favicon.ico"],
+    apple: [{ url: "/apple-touch-icon.png", type: "image/png" }],
   },
 };
 
