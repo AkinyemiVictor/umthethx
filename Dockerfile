@@ -40,4 +40,4 @@ ENV PYTHON_BIN="/opt/venv/bin/python"
 WORKDIR /app
 COPY --from=build /app /app
 
-CMD ["pnpm", "-C", "apps/web", "run", "worker:convert"]
+CMD ["node", "apps/web/node_modules/tsx/dist/cli.mjs", "apps/web/worker/convert-worker.ts"]
