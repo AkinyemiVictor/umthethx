@@ -29,8 +29,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   zip \
   python3 \
   python3-pip \
+  python3-venv \
   && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --no-cache-dir pdfplumber pandas openpyxl img2pdf
+RUN python3 -m venv /opt/venv \
+  && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+  && /opt/venv/bin/pip install --no-cache-dir pdfplumber pandas openpyxl img2pdf
+ENV PATH="/opt/venv/bin:${PATH}"
+ENV PYTHON_BIN="/opt/venv/bin/python"
 
 WORKDIR /app
 COPY --from=build /app /app

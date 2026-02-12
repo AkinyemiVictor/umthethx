@@ -10,26 +10,29 @@ Simple upload -> convert -> download tool. No accounts or history.
 4. Start web (PowerShell): `$env:NEXT_DISABLE_TURBOPACK="1"; pnpm --filter web dev`
 5. Start worker in another terminal: `pnpm --filter web run worker:convert`
 
-## Online deployment (managed Redis + always-on worker)
+## Online deployment (Railway)
 
-This repo now includes `render.yaml` for Render Blueprint deploys.
+This repo includes Railway config-as-code files:
+
+- Web service config: `apps/web/railway.json`
+- Worker service config: `workers/convert/railway.json`
 
 1. Push this repo to GitHub.
-2. In Render, create a new Blueprint and point it at this repository.
-3. Render provisions three services from `render.yaml`:
-   - `umthethx-redis` (managed Redis)
-   - `umthethx-web` (Next.js API + frontend)
-   - `umthethx-worker` (always-on conversion worker)
-4. Fill required secret env vars on services:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY` (web)
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `PUBLIC_USER_ID` (web)
-   - `AWS_REGION`
-   - `S3_BUCKET`
-   - `AWS_ACCESS_KEY_ID`
-   - `AWS_SECRET_ACCESS_KEY`
-5. Confirm web health at `/api/health` and worker logs show it is polling `converter-jobs`.
+2. Create a new Railway project from that repo.
+3. Add a Redis service in the same project.
+4. Create the web service from the repo and set:
+   - Root Directory: `/`
+   - Config as Code path: `/apps/web/railway.json`
+5. Create the worker service from the repo and set:
+   - Root Directory: `/`
+   - Config as Code path: `/workers/convert/railway.json`
+6. Set `REDIS_URL` on both services to `${{Redis.REDIS_URL}}`.
+7. Set required app secrets:
+   - Web: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_USER_ID`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+   - Worker: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+8. Deploy both services, then:
+   - Check web health at `/api/health`
+   - Confirm worker logs show it is consuming `converter-jobs`
 
 ## Worker container
 
