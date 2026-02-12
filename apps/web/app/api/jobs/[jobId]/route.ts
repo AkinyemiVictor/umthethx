@@ -31,11 +31,9 @@ const getContentType = (filename: string) => {
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<Params> | Params },
+  context: { params: Promise<Params> },
 ) {
-  const resolvedParams =
-    context.params instanceof Promise ? await context.params : context.params;
-  const jobId = resolvedParams.jobId;
+  const { jobId } = await context.params;
 
   const job = await getJobRecord(jobId);
   if (!job) {

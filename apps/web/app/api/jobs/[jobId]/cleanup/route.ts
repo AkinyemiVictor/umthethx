@@ -16,11 +16,9 @@ const TERMINAL_STATUSES = new Set(["completed", "failed"]);
 
 export async function POST(
   request: Request,
-  context: { params: Promise<Params> | Params },
+  context: { params: Promise<Params> },
 ) {
-  const resolvedParams =
-    context.params instanceof Promise ? await context.params : context.params;
-  const jobId = resolvedParams.jobId;
+  const { jobId } = await context.params;
 
   let force = false;
   try {
