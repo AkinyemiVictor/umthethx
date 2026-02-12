@@ -13,10 +13,17 @@ const requireEnv = (key: EnvKey) => {
 
 export const QUEUE_NAME = "converter-jobs";
 
-export const getRedisConnection = () =>
-  new IORedis(requireEnv("REDIS_URL"), {
-    maxRetriesPerRequest: null,
-  });
+const buildRedisOptions = (url: string) => ({
+  maxRetriesPerRequest: null,
+  enableOfflineQueue: false,
+  connectTimeout: 10_000,
+  ...(url.startsWith("rediss://") ? { tls: {} } : {}),
+});
+
+export const getRedisConnection = () => {
+  const redisUrl = requireEnv("REDIS_URL");
+  return new IORedis(redisUrl, buildRedisOptions(redisUrl));
+};
 
 export const getQueue = () =>
   new Queue(QUEUE_NAME, {

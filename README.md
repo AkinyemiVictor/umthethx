@@ -4,10 +4,32 @@ Simple upload -> convert -> download tool. No accounts or history.
 
 ## Local dev
 
-1. Copy `.env.example` to `.env` and set AWS + Redis.
-2. Install deps: `pnpm install`
-3. Start web (PowerShell): `$env:NEXT_DISABLE_TURBOPACK="1"; pnpm --filter web dev`
-4. Start worker: `pnpm --filter web run worker:convert`
+1. Copy `.env.example` to `.env` and fill required values.
+2. Start Redis: `docker run -d --name umthethx-redis -p 6379:6379 redis:7-alpine`
+3. Install deps: `pnpm install`
+4. Start web (PowerShell): `$env:NEXT_DISABLE_TURBOPACK="1"; pnpm --filter web dev`
+5. Start worker in another terminal: `pnpm --filter web run worker:convert`
+
+## Online deployment (managed Redis + always-on worker)
+
+This repo now includes `render.yaml` for Render Blueprint deploys.
+
+1. Push this repo to GitHub.
+2. In Render, create a new Blueprint and point it at this repository.
+3. Render provisions three services from `render.yaml`:
+   - `umthethx-redis` (managed Redis)
+   - `umthethx-web` (Next.js API + frontend)
+   - `umthethx-worker` (always-on conversion worker)
+4. Fill required secret env vars on services:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY` (web)
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `PUBLIC_USER_ID` (web)
+   - `AWS_REGION`
+   - `S3_BUCKET`
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+5. Confirm web health at `/api/health` and worker logs show it is polling `converter-jobs`.
 
 ## Worker container
 
