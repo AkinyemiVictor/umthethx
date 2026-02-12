@@ -35,7 +35,7 @@ const ensureProductionBuild = async () => {
   console.warn(
     `Missing production build at ${buildIdPath}. Running "next build" before start...`,
   );
-  await runNext(["build", "--webpack", "--no-lint"]);
+  await runNext(["build", "--webpack"]);
 };
 
 const start = async () => {
