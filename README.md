@@ -22,10 +22,10 @@ This repo includes Railway config-as-code files:
 3. Add a Redis service in the same project.
 4. Create the web service from the repo and set:
    - Root Directory: `/`
-   - Config as Code path: `/apps/web/railway.json`
+   - Config as Code path: `apps/web/railway.json`
 5. Create the worker service from the repo and set:
    - Root Directory: `/`
-   - Config as Code path: `/workers/convert/railway.json`
+   - Config as Code path: `workers/convert/railway.json`
 6. Set `REDIS_URL` on both services to `${{Redis.REDIS_URL}}`.
 7. Set required app secrets:
    - Web: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_USER_ID`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
