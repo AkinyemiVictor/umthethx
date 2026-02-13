@@ -45,6 +45,7 @@ const LIBRETRANSLATE_SOURCE =
   process.env.LIBRETRANSLATE_SOURCE_LANG?.trim() || "auto";
 const LIBRETRANSLATE_API_KEY = process.env.LIBRETRANSLATE_API_KEY?.trim();
 const TESSERACT_BIN = process.env.TESSERACT_BIN?.trim() || "tesseract";
+const TESSERACT_LANG = process.env.TESSERACT_LANG?.trim() || "eng";
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -882,38 +883,141 @@ const uploadOutput = async (filePath: string, key: string) => {
   );
 };
 
-const runTesseractToText = async (inputPath: string, outputBase: string) => {
+const scoreOcrText = (text: string) => {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const alphaNum = (normalized.match(/[A-Za-z0-9]/g) ?? []).length;
+  const words = normalized.length > 0 ? normalized.split(" ").length : 0;
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
+  return alphaNum + words * 2 + lines;
+};
+
+const readOcrOutput = async (outputBase: string) => {
+  const outputPath = `${outputBase}.txt`;
   try {
-    await runCommand(TESSERACT_BIN, [inputPath, outputBase, "-l", "eng"]);
-    return `${outputBase}.txt`;
-  } catch (error) {
-    if (!isMissingCommandError(error)) {
-      throw error;
-    }
-    if (TESSERACT_BIN !== "tesseract") {
-      try {
-        await runCommand("tesseract", [inputPath, outputBase, "-l", "eng"]);
-        return `${outputBase}.txt`;
-      } catch (fallbackError) {
-        if (!isMissingCommandError(fallbackError)) {
-          throw fallbackError;
+    return await readFile(outputPath, "utf8");
+  } catch {
+    return "";
+  }
+};
+
+const runTesseractAttempt = async (options: {
+  command: string;
+  inputPath: string;
+  outputBase: string;
+  psm: number;
+}) => {
+  await runCommand(options.command, [
+    options.inputPath,
+    options.outputBase,
+    "-l",
+    TESSERACT_LANG,
+    "--oem",
+    "1",
+    "--psm",
+    String(options.psm),
+    "-c",
+    "preserve_interword_spaces=1",
+  ]);
+  return readOcrOutput(options.outputBase);
+};
+
+const buildPreprocessedOcrImage = async (
+  inputPath: string,
+  outputDir: string,
+  baseName: string,
+) => {
+  const preprocessedPath = path.join(
+    outputDir,
+    `${sanitizeFileName(baseName)}-ocr-preprocessed.png`,
+  );
+  await runImageMagick([
+    inputPath,
+    "-auto-orient",
+    "-colorspace",
+    "Gray",
+    "-resize",
+    "200%",
+    "-contrast-stretch",
+    "1%x1%",
+    "-sharpen",
+    "0x1",
+    preprocessedPath,
+  ]);
+  return preprocessedPath;
+};
+
+const runTesseractToText = async (inputPath: string, outputBase: string) => {
+  const outputDir = path.dirname(outputBase);
+  const outputBaseName = path.basename(outputBase);
+  const attemptBase = path.join(outputDir, `${outputBaseName}-ocr-attempt`);
+  const best = { text: "", score: -1 };
+  const commands = Array.from(new Set([TESSERACT_BIN, "tesseract"]));
+  const psmModes = [6, 11];
+  let preprocessedPath: string | null = null;
+  let hadNonMissingCommandError = false;
+
+  const tryCandidate = async (candidatePath: string) => {
+    for (const command of commands) {
+      for (const psm of psmModes) {
+        try {
+          const text = await runTesseractAttempt({
+            command,
+            inputPath: candidatePath,
+            outputBase: attemptBase,
+            psm,
+          });
+          const score = scoreOcrText(text);
+          if (score > best.score) {
+            best.text = text;
+            best.score = score;
+          }
+        } catch (error) {
+          if (isMissingCommandError(error)) {
+            continue;
+          }
+          hadNonMissingCommandError = true;
         }
       }
     }
-  }
+  };
 
   try {
+    await tryCandidate(inputPath);
+
+    try {
+      preprocessedPath = await buildPreprocessedOcrImage(
+        inputPath,
+        outputDir,
+        outputBaseName,
+      );
+      await tryCandidate(preprocessedPath);
+    } catch {
+      // Image preprocessing is optional; continue with direct OCR result.
+    }
+
+    if (best.score >= 5) {
+      await writeFile(`${outputBase}.txt`, best.text, "utf8");
+      return `${outputBase}.txt`;
+    }
+
     const bytes = await readFile(inputPath);
     const text = await detectTextFromImageBytes(bytes);
-    const outputPath = `${outputBase}.txt`;
-    await writeFile(outputPath, text ?? "", "utf8");
-    return outputPath;
+    await writeFile(`${outputBase}.txt`, text ?? "", "utf8");
+    return `${outputBase}.txt`;
   } catch (textractError) {
     const message =
       textractError instanceof Error
         ? textractError.message
         : "Textract OCR failed.";
+    if (hadNonMissingCommandError) {
+      throw new Error(`OCR failed. Tesseract/Textract error: ${message}`);
+    }
     throw new Error(`Tesseract not available and Textract failed: ${message}`);
+  } finally {
+    await rm(`${attemptBase}.txt`, { force: true }).catch(() => undefined);
+    if (preprocessedPath) {
+      await rm(preprocessedPath, { force: true }).catch(() => undefined);
+    }
   }
 };
 
