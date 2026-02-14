@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script";
 import "./globals.css";
 import { LanguageProvider } from "./components/language-provider";
 import { PageAds } from "./components/page-ads";
@@ -34,6 +35,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const gaMeasurementId =
+    process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-V1H324ZER7";
+  const shouldEnableAnalytics =
+    process.env.NODE_ENV === "production" && Boolean(gaMeasurementId);
   const lang = await getCurrentLanguage();
   const messages = getMessages(lang);
   const t = getTranslator(lang);
@@ -41,6 +46,22 @@ export default async function RootLayout({
   return (
     <html lang={lang}>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        {shouldEnableAnalytics ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="gtag-init" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${gaMeasurementId}');
+              `}
+            </Script>
+          </>
+        ) : null}
         <LanguageProvider lang={lang} messages={messages}>
           <PageAds label={t("ads.label")} text={t("ads.text")}>
             {children}
