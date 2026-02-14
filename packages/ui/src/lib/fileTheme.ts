@@ -137,10 +137,12 @@ export function fileAriaLabel(options?: {
 
 export function fileTheme(ext?: string): FileTheme {
   const f = familyForExt(ext);
+  const darkChipText =
+    f === "amber" || f === "yellow" ? "dark:text-zinc-950" : "dark:text-white";
   return {
-    chipBg: `bg-${f}-100 dark:bg-${f}-950/40`,
-    chipText: `text-${f}-700 dark:text-${f}-300`,
-    border: `border-${f}-300 dark:border-${f}-700`,
+    chipBg: `bg-${f}-100 dark:bg-${f}-500`,
+    chipText: `text-${f}-700 ${darkChipText}`,
+    border: `border-${f}-300 dark:border-${f}-500`,
     icon: `text-${f}-600 dark:text-${f}-400`,
     progress: `bg-${f}-600`,
     progressTrack: "bg-zinc-200 dark:bg-zinc-900",

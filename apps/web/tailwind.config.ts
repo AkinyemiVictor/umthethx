@@ -24,11 +24,15 @@ const safelist = families.flatMap((f) => [
   `border-${f}-700`,
   `ring-${f}-500`,
   `dark:bg-${f}-700/20`,
+  `dark:bg-${f}-500`,
   `dark:bg-${f}-950/40`,
   `dark:text-${f}-300`,
   `dark:text-${f}-400`,
   `dark:border-${f}-700`,
+  `dark:border-${f}-500`,
 ]);
+
+safelist.push("dark:text-white", "dark:text-zinc-950");
 
 export default {
   darkMode: "class",

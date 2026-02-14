@@ -56,7 +56,15 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             alt="Umthethx logo"
             width={140}
             height={44}
-            className="h-4 w-auto sm:h-6"
+            className="h-4 w-auto sm:h-6 dark:hidden"
+            priority
+          />
+          <Image
+            src="/logo/logo-dark.png"
+            alt="Umthethx logo"
+            width={140}
+            height={44}
+            className="hidden h-4 w-auto sm:h-6 dark:block"
             priority
           />
           <span className="sr-only">Umthethx</span>

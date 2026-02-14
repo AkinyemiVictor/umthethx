@@ -165,7 +165,7 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
         });
 
   return (
-    <div className="relative min-h-screen bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
+    <div className="relative min-h-[100dvh] bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-12">
         <SiteHeader converters={converters} currentSlug={converter.slug} />
 

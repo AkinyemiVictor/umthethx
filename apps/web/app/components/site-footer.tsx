@@ -93,7 +93,14 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
             alt="Umthethx logo"
             width={120}
             height={38}
-            className="h-auto w-auto"
+            className="h-auto w-auto dark:hidden"
+          />
+          <Image
+            src="/logo/logo-dark.png"
+            alt="Umthethx logo"
+            width={120}
+            height={38}
+            className="hidden h-auto w-auto dark:block"
           />
           <p className="text-sm text-zinc-600 dark:text-[var(--muted)]">
             {t("footer.tagline")}
