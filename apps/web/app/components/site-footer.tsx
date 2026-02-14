@@ -89,14 +89,14 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
       <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr_1fr_1fr]">
         <div className="space-y-3">
           <Image
-            src="/logo/logo.png"
+            src="/logo/logo%202.png"
             alt="Umthethx logo"
             width={120}
             height={38}
             className="h-auto w-auto dark:hidden"
           />
           <Image
-            src="/logo/logo-dark.png"
+            src="/logo/UMTHETHX%20dark%20mode%202.png"
             alt="Umthethx logo"
             width={120}
             height={38}

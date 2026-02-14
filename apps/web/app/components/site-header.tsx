@@ -52,7 +52,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
       <header className="flex items-center justify-between gap-3 sm:gap-6">
         <Link href="/" className="flex items-center gap-3 shrink-0">
           <Image
-            src="/logo/logo.png"
+            src="/logo/logo%202.png"
             alt="Umthethx logo"
             width={140}
             height={44}
@@ -60,7 +60,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             priority
           />
           <Image
-            src="/logo/logo-dark.png"
+            src="/logo/UMTHETHX%20dark%20mode%202.png"
             alt="Umthethx logo"
             width={140}
             height={44}
