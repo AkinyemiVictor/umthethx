@@ -48,6 +48,8 @@ const TESSERACT_BIN = process.env.TESSERACT_BIN?.trim() || "tesseract";
 const TESSERACT_LANG = process.env.TESSERACT_LANG?.trim() || "eng";
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+const MIN_OCR_TEXT_SCORE = 5;
+const MIN_PDF_EXTRACTED_TEXT_SCORE = 15;
 
 const sanitizeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -995,7 +997,7 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
       // Image preprocessing is optional; continue with direct OCR result.
     }
 
-    if (best.score >= 5) {
+    if (best.score >= MIN_OCR_TEXT_SCORE) {
       await writeFile(`${outputBase}.txt`, best.text, "utf8");
       return `${outputBase}.txt`;
     }
@@ -1165,6 +1167,9 @@ const runPdfToImages = async (
     const files = await readdir(outputDir);
     return files
       .filter((file) => file.startsWith(`${base}-`) && file.endsWith(".jpg"))
+      .sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+      )
       .map((file) => path.join(outputDir, file));
   } catch (error) {
     if (!isMissingCommandError(error)) {
@@ -1212,6 +1217,48 @@ const runPdfToImages = async (
     throw new Error(
       `pdftoppm not found and pdfjs fallback failed: ${message}`,
     );
+  }
+};
+
+const runPdfToTextWithOcr = async (
+  inputPath: string,
+  outputDir: string,
+  baseName: string,
+) => {
+  const pagesDir = path.join(
+    outputDir,
+    `${sanitizeFileName(baseName)}-pdf-ocr-pages`,
+  );
+  await ensureDir(pagesDir);
+
+  try {
+    const images = await runPdfToImages(inputPath, pagesDir, "page");
+    if (images.length === 0) {
+      return "";
+    }
+
+    const pageTexts: string[] = [];
+    const safeBaseName = sanitizeFileName(baseName);
+    for (let pageIndex = 0; pageIndex < images.length; pageIndex += 1) {
+      const pageImagePath = images[pageIndex];
+      if (!pageImagePath) {
+        continue;
+      }
+      const pageOutputBase = path.join(
+        pagesDir,
+        `${safeBaseName}-ocr-page-${pageIndex + 1}`,
+      );
+      const textPath = await runTesseractToText(pageImagePath, pageOutputBase);
+      const text = await readFile(textPath, "utf8");
+      const cleaned = text.trim();
+      if (cleaned.length > 0) {
+        pageTexts.push(cleaned);
+      }
+    }
+
+    return pageTexts.join("\n\n");
+  } finally {
+    await rm(pagesDir, { recursive: true, force: true }).catch(() => undefined);
   }
 };
 
@@ -1415,7 +1462,44 @@ const processJob = async (jobId: string) => {
       outputDir,
       `${sanitizeFileName(input.baseName)}.txt`,
     );
-    await runCommand("pdftotext", [input.localPath, outputPath]);
+
+    let extractedText = "";
+    let pdftotextError: unknown;
+
+    try {
+      await runCommand("pdftotext", [input.localPath, outputPath]);
+      extractedText = await readFile(outputPath, "utf8");
+    } catch (error) {
+      pdftotextError = error;
+    }
+
+    const extractedScore = scoreOcrText(extractedText);
+    if (extractedScore < MIN_PDF_EXTRACTED_TEXT_SCORE) {
+      try {
+        const ocrText = await runPdfToTextWithOcr(
+          input.localPath,
+          outputDir,
+          input.baseName,
+        );
+        if (scoreOcrText(ocrText) > extractedScore) {
+          extractedText = ocrText;
+        }
+      } catch (ocrError) {
+        if (pdftotextError) {
+          const pdftotextMessage =
+            pdftotextError instanceof Error
+              ? pdftotextError.message
+              : "pdftotext failed.";
+          const ocrMessage =
+            ocrError instanceof Error ? ocrError.message : "OCR failed.";
+          throw new Error(
+            `PDF text extraction failed. ${pdftotextMessage} OCR fallback: ${ocrMessage}`,
+          );
+        }
+      }
+    }
+
+    await writeFile(outputPath, extractedText, "utf8");
     await addOutput(outputPath, buildOutputName(input.baseName, "txt"));
   };
 
