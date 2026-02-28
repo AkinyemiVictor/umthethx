@@ -48,6 +48,18 @@ const FlagPt = () => (
   </svg>
 );
 
+const FlagZa = () => (
+  <svg viewBox="0 0 24 16" className="h-4 w-6" aria-hidden="true">
+    <rect width="24" height="16" fill="#1f2937" />
+    <path d="M0 0 10 8 0 16" fill="#15803d" />
+    <path d="M0 2 8 8 0 14" fill="#facc15" />
+    <path d="M0 4 6 8 0 12" fill="#111827" />
+    <path d="M10 0h14v8H10z" fill="#dc2626" />
+    <path d="M10 8h14v8H10z" fill="#1d4ed8" />
+    <path d="M9 0h2v16H9z" fill="#ffffff" />
+  </svg>
+);
+
 const FlagAr = () => (
   <svg viewBox="0 0 24 16" className="h-4 w-6" aria-hidden="true">
     <rect width="24" height="16" fill="#15803d" />
@@ -67,5 +79,6 @@ export const languages: Language[] = [
   { code: "es", label: "Spanish", flag: <FlagEs /> },
   { code: "de", label: "German", flag: <FlagDe /> },
   { code: "pt", label: "Portuguese", flag: <FlagPt /> },
+  { code: "af", label: "Afrikaans", flag: <FlagZa /> },
   { code: "ar", label: "Arabic", flag: <FlagAr /> },
 ];

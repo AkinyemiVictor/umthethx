@@ -1,4 +1,4 @@
-export type LanguageCode = "en" | "fr" | "es" | "de" | "pt" | "ar";
+export type LanguageCode = "en" | "fr" | "es" | "de" | "pt" | "ar" | "af";
 
 export const SUPPORTED_LANGUAGES: LanguageCode[] = [
   "en",
@@ -7,6 +7,7 @@ export const SUPPORTED_LANGUAGES: LanguageCode[] = [
   "de",
   "pt",
   "ar",
+  "af",
 ];
 
 export const DEFAULT_LANGUAGE: LanguageCode = "en";
@@ -685,13 +686,32 @@ export const translations = {
     "theme.dark": "داكن",
     "theme.light": "فاتح",
   },
+  af: {
+    "footer.tagline":
+      "KI-aangedrewe omskakelaars vir beelde, dokumente en meer.",
+    "footer.converters": "Omskakelaars",
+    "footer.quickLinks": "Vinnige skakels",
+    "footer.language": "Taal",
+    "footer.languageDescription":
+      "Verander die vertoontaal vir die hele ervaring.",
+    "footer.switchLanguageTo": "Verander taal na {language}",
+    "footer.terms": "Bepalings en Voorwaardes",
+    "footer.privacy": "Privaatheidsbeleid",
+    "footer.refunds": "Terugbetalingsbeleid",
+    "footer.contact": "Kontak Ons",
+    "footer.copyright":
+      "(c) 2026 Umthethx. Alle regte voorbehou.",
+  },
 } as const;
 
 export type TranslationKey = keyof typeof translations.en;
 export type Messages = Record<TranslationKey, string>;
 
 export const getMessages = (lang: LanguageCode): Messages =>
-  translations[lang] ?? translations[DEFAULT_LANGUAGE];
+  ({
+    ...translations[DEFAULT_LANGUAGE],
+    ...(translations[lang] ?? {}),
+  }) as Messages;
 
 export const getTranslator =
   (lang: LanguageCode) =>

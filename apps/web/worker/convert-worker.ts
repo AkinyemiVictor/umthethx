@@ -50,6 +50,20 @@ const TESSERACT_LANG = process.env.TESSERACT_LANG?.trim() || "eng";
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MIN_OCR_TEXT_SCORE = 5;
 const MIN_PDF_EXTRACTED_TEXT_SCORE = 15;
+const DEFAULT_MAX_DOCUMENT_PAGES = 30;
+
+const parsePositiveInteger = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const MAX_DOCUMENT_PAGES = parsePositiveInteger(
+  process.env.MAX_DOCUMENT_PAGES?.trim(),
+  DEFAULT_MAX_DOCUMENT_PAGES,
+);
 
 const sanitizeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -1354,6 +1368,22 @@ const ensureDir = async (dirPath: string) => {
   await mkdir(dirPath, { recursive: true });
 };
 
+const getPdfPageCount = async (pdfPath: string) => {
+  const bytes = await readFile(pdfPath);
+  const pdfDoc = await PDFDocument.load(bytes);
+  return pdfDoc.getPageCount();
+};
+
+const enforceDocumentPageLimit = async (pdfPath: string, fileName: string) => {
+  const pageCount = await getPdfPageCount(pdfPath);
+  if (pageCount > MAX_DOCUMENT_PAGES) {
+    throw new Error(
+      `${fileName} has ${pageCount} pages. Maximum allowed is ${MAX_DOCUMENT_PAGES} pages per document. Please use our Document Splitter to split the file and finish the job.`,
+    );
+  }
+  return pageCount;
+};
+
 const processJob = async (jobId: string) => {
   const job = await getJobRecord(jobId);
   if (!job) {
@@ -1458,6 +1488,8 @@ const processJob = async (jobId: string) => {
   const handlePdfToText = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    await enforceDocumentPageLimit(input.localPath, input.filename);
+
     const outputPath = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}.txt`,
@@ -1507,6 +1539,8 @@ const processJob = async (jobId: string) => {
     input: JobInput & { baseName: string; localPath: string },
     format: "csv" | "xlsx",
   ) => {
+    await enforceDocumentPageLimit(input.localPath, input.filename);
+
     const outputPath = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}.${format}`,
@@ -1518,6 +1552,8 @@ const processJob = async (jobId: string) => {
   const handlePdfToJpg = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    await enforceDocumentPageLimit(input.localPath, input.filename);
+
     const pageDir = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}-pages`,
@@ -1549,6 +1585,11 @@ const processJob = async (jobId: string) => {
     const bytes = await readFile(input.localPath);
     const pdfDoc = await PDFDocument.load(bytes);
     const pageCount = pdfDoc.getPageCount();
+    if (pageCount > MAX_DOCUMENT_PAGES) {
+      throw new Error(
+        `${input.filename} has ${pageCount} pages. Maximum allowed is ${MAX_DOCUMENT_PAGES} pages per document. Please use our Document Splitter to split the file and finish the job.`,
+      );
+    }
     if (pageCount === 0) {
       throw new Error("No pages found.");
     }
@@ -1611,6 +1652,7 @@ const processJob = async (jobId: string) => {
       "pdf",
       outputDir,
     );
+    await enforceDocumentPageLimit(pdfPath, input.filename);
     const pageDir = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}-pages`,
@@ -1639,6 +1681,8 @@ const processJob = async (jobId: string) => {
   const handlePdfToHtml = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    await enforceDocumentPageLimit(input.localPath, input.filename);
+
     const htmlDir = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}-html`,
@@ -1727,6 +1771,9 @@ const processJob = async (jobId: string) => {
       if (preparedInputs.length < 2) {
         throw new Error("Merge PDF requires at least two files.");
       }
+      for (const input of preparedInputs) {
+        await enforceDocumentPageLimit(input.localPath, input.filename);
+      }
       const outputPath = path.join(outputDir, "merged.pdf");
       await runCommand("pdfunite", [
         ...preparedInputs.map((input) => input.localPath),
@@ -1767,6 +1814,7 @@ const processJob = async (jobId: string) => {
               "pdf",
               outputDir,
             );
+            await enforceDocumentPageLimit(outputPath, input.filename);
             await addOutput(outputPath, buildOutputName(input.baseName, "pdf"));
             break;
           }
