@@ -37,17 +37,26 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const [isMobileConvertersOpen, setIsMobileConvertersOpen] = useState(false);
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
   const [isNoteMakerOpen, setIsNoteMakerOpen] = useState(false);
+  const [isConvertersOpen, setIsConvertersOpen] = useState(false);
+
+  const setConvertersOpen = (next: boolean) => {
+    if (converterToggleRef.current) {
+      converterToggleRef.current.checked = next;
+    }
+    setIsConvertersOpen(next);
+  };
+  const toggleConverters = () => setConvertersOpen(!isConvertersOpen);
+  const closeConverters = () => setConvertersOpen(false);
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
     setIsNoteMakerOpen(false);
+    closeConverters();
   };
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
     setIsNoteMakerOpen(false);
-    if (converterToggleRef.current) {
-      converterToggleRef.current.checked = false;
-    }
+    closeConverters();
   };
   const toggleMobileConverters = () =>
     setIsMobileConvertersOpen((prev) => !prev);
@@ -57,8 +66,8 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleNoteMaker = () =>
     setIsNoteMakerOpen((prev) => {
       const next = !prev;
-      if (next && converterToggleRef.current) {
-        converterToggleRef.current.checked = false;
+      if (next) {
+        closeConverters();
       }
       return next;
     });
@@ -92,6 +101,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         className="peer sr-only"
         aria-controls="converter-panel"
         aria-label={t("header.toggleConvertersList")}
+        onChange={(event) => setIsConvertersOpen(event.target.checked)}
       />
       <label
         htmlFor={toggleId}
@@ -130,55 +140,90 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         <div className="flex items-center gap-2 sm:gap-6">
           <ThemeToggle />
           <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[740px]:flex min-[740px]:gap-6 min-[740px]:text-sm">
-            <label
-              htmlFor={toggleId}
-              onClick={closeNoteMaker}
-              className="inline-flex cursor-pointer list-none items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
-            >
-              {t("header.converters")}
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 20 20"
-                className="h-4 w-4 text-zinc-500 dark:text-[var(--muted-2)]"
+            <div className="inline-flex overflow-hidden rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
+              <Link
+                href="/"
+                onClick={() => {
+                  closeNoteMaker();
+                  closeConverters();
+                }}
+                className="inline-flex items-center gap-2 whitespace-nowrap px-3 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
               >
-                <path
-                  d="M5 7.5 10 12.5 15 7.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </label>
-            <button
-              type="button"
-              onClick={toggleNoteMaker}
-              aria-controls="notemaker-panel"
-              aria-expanded={isNoteMakerOpen}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
-            >
-              {t("header.noteMakerTypes")}
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 20 20"
-                className={[
-                  "h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]",
-                  isNoteMakerOpen ? "rotate-180" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
+                {t("header.converters")}
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  closeNoteMaker();
+                  toggleConverters();
+                }}
+                aria-controls="converter-panel"
+                aria-expanded={isConvertersOpen}
+                className="inline-flex items-center justify-center border-l border-zinc-200 px-2 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-1)] dark:focus-visible:ring-offset-[var(--background)] sm:px-3 sm:py-2"
               >
-                <path
-                  d="M5 7.5 10 12.5 15 7.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  className={[
+                    "h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]",
+                    isConvertersOpen ? "rotate-180" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <path
+                    d="M5 7.5 10 12.5 15 7.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div className="inline-flex overflow-hidden rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
+              <Link
+                href="/ai-notemaker"
+                onClick={() => {
+                  closeConverters();
+                  closeNoteMaker();
+                }}
+                className="inline-flex items-center gap-2 whitespace-nowrap px-3 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+              >
+                {t("header.noteMakerTypes")}
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  closeConverters();
+                  toggleNoteMaker();
+                }}
+                aria-controls="notemaker-panel"
+                aria-expanded={isNoteMakerOpen}
+                className="inline-flex items-center justify-center border-l border-zinc-200 px-2 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-1)] dark:focus-visible:ring-offset-[var(--background)] sm:px-3 sm:py-2"
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 20 20"
+                  className={[
+                    "h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]",
+                    isNoteMakerOpen ? "rotate-180" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <path
+                    d="M5 7.5 10 12.5 15 7.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </nav>
           <button
             type="button"
@@ -425,8 +470,8 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             {noteMakerGroups.map((group) => (
               <div key={group.id}>
                 <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-[var(--muted-2)]">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
-                    <NoteMakerCategoryIcon name={group.id} className="h-3.5 w-3.5" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
+                    <NoteMakerCategoryIcon name={group.id} className="h-4 w-4" />
                   </div>
                   <span>{t(group.titleKey)}</span>
                 </div>

@@ -55,8 +55,8 @@ export function AiNoteMakerTypeGrid() {
           >
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
-                  <NoteMakerCategoryIcon name={group.id} className="h-4 w-4" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
+                  <NoteMakerCategoryIcon name={group.id} className="h-5 w-5" />
                 </div>
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
                   {t(group.titleKey)}

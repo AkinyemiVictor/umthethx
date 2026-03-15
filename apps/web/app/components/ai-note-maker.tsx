@@ -409,7 +409,7 @@ export function AiNoteMakerWorkspace() {
       ) : (
         <>
           <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
+            <div className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none lg:h-[360px] lg:min-h-[360px] flex flex-col">
               <div
                 role="button"
                 tabIndex={0}
@@ -427,7 +427,7 @@ export function AiNoteMakerWorkspace() {
                 }}
                 onClick={() => inputRef.current?.click()}
                 className={[
-                  "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition",
+                  "flex flex-1 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition",
                   "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",
                   "dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:shadow-none",
                   isDragging
@@ -486,7 +486,7 @@ export function AiNoteMakerWorkspace() {
                 />
               </div>
 
-              <div className="mt-4">
+              <div className="mt-4 min-h-0 overflow-y-auto">
                 {uploads.length ? (
                   <ul className="space-y-2 text-xs">
                     {uploads.map((item, index) => (
@@ -533,7 +533,7 @@ export function AiNoteMakerWorkspace() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
+            <div className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none lg:h-[360px] lg:min-h-[360px] flex flex-col">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
                   {t("aiNoteMaker.inputLabel")}
@@ -543,7 +543,7 @@ export function AiNoteMakerWorkspace() {
                 </span>
               </div>
               <textarea
-                className="mt-3 h-40 w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 placeholder:text-zinc-400 focus-visible:border-[var(--brand-400)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)] dark:placeholder:text-[var(--muted-2)]"
+                className="mt-3 min-h-[160px] w-full flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 placeholder:text-zinc-400 focus-visible:border-[var(--brand-400)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)] dark:placeholder:text-[var(--muted-2)]"
                 placeholder={t("aiNoteMaker.inputPlaceholder")}
                 value={text}
                 onChange={(event) => {

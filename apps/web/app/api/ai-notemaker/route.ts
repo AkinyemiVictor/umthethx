@@ -217,6 +217,10 @@ const DOMAIN_SECTIONS: Record<
       keywords: ["future", "further research", "next steps"],
     },
     { title: "Key Terminology", keywords: ["definition", "term", "concept"] },
+    {
+      title: "Citations / References",
+      keywords: ["citation", "reference", "doi", "et al", "journal", "source"],
+    },
   ],
   medical: [
     { title: "Clinical Context", keywords: ["clinical", "history", "context"] },
@@ -289,6 +293,278 @@ const DOMAIN_SECTIONS: Record<
     { title: "Stakeholders", keywords: ["stakeholder", "source", "official"] },
     { title: "Implications", keywords: ["impact", "implication", "effect"] },
   ],
+};
+
+const DOMAIN_SPECS: Record<
+  Exclude<DomainKey, "general" | "smart">,
+  string[]
+> = {
+  academic: [
+    "Research focus and objectives",
+    "Methodology and evidence",
+    "Key findings and contributions",
+    "Limitations and future work",
+    "Citations / references",
+  ],
+  medical: [
+    "Clinical context and symptoms",
+    "Diagnostic findings",
+    "Treatment plan and medications",
+    "Key medical terms",
+  ],
+  legal: [
+    "Case facts and issues",
+    "Applicable laws and precedents",
+    "Rulings and reasoning",
+  ],
+  business: [
+    "Key insights and decisions",
+    "KPIs, risks, and action items",
+  ],
+  engineering: [
+    "System overview and components",
+    "Architecture and implementation notes",
+    "Constraints and trade-offs",
+  ],
+  finance: [
+    "Key metrics and trends",
+    "Risks and outlook",
+  ],
+  education: [
+    "Key concepts and definitions",
+    "Study notes and review points",
+  ],
+  media: [
+    "Key facts and timeline",
+    "Quotes and implications",
+  ],
+};
+
+const SUBTYPE_SPECS: Record<
+  Exclude<DomainKey, "general" | "smart">,
+  Record<string, string[]>
+> = {
+  academic: {
+    thesis: [
+      "Research topic and problem statement",
+      "Objectives / hypotheses",
+      "Methodology and data",
+      "Key findings and contributions",
+      "Limitations and future work",
+      "Citations / references",
+    ],
+    research: [
+      "Research question",
+      "Methods and results",
+      "Key conclusions",
+      "Citations / references",
+    ],
+    literature: [
+      "Themes and trends",
+      "Key sources",
+      "Research gaps",
+      "Synthesis / conclusions",
+      "Citations / references",
+    ],
+    lecture: [
+      "Key concepts",
+      "Definitions / formulas",
+      "Study takeaways",
+    ],
+  },
+  medical: {
+    clinical: [
+      "Presenting complaint and history",
+      "Symptoms / vitals",
+      "Diagnosis",
+      "Treatment plan",
+      "Medications and dosage",
+    ],
+    case: [
+      "Case context",
+      "Findings",
+      "Interventions",
+      "Outcome and follow-up",
+    ],
+    research: [
+      "Study design",
+      "Population / sample",
+      "Key results",
+      "Clinical implications",
+      "Limitations",
+    ],
+    drug: [
+      "Indications",
+      "Dosage and route",
+      "Contraindications",
+      "Side effects",
+      "Interactions",
+    ],
+    study: [
+      "Key terms",
+      "Disease mechanisms",
+      "High-yield points",
+      "Treatment summary",
+    ],
+  },
+  legal: {
+    case: [
+      "Case name and court",
+      "Facts and issues",
+      "Holding",
+      "Reasoning",
+      "Precedents",
+    ],
+    contract: [
+      "Parties and scope",
+      "Key clauses",
+      "Obligations",
+      "Risks",
+      "Termination terms",
+    ],
+    judgment: [
+      "Decision",
+      "Legal tests",
+      "Reasoning",
+      "Orders",
+      "Precedents",
+    ],
+    statute: [
+      "Purpose and scope",
+      "Key sections",
+      "Definitions",
+      "Penalties / remedies",
+      "Application notes",
+    ],
+    study: [
+      "Core doctrines",
+      "Elements / tests",
+      "Leading cases",
+    ],
+  },
+  business: {
+    meeting: [
+      "Agenda and decisions",
+      "Action items",
+      "Owners and deadlines",
+    ],
+    market: [
+      "Market size and trends",
+      "Competitors",
+      "Customer insights",
+    ],
+    strategy: [
+      "Objectives",
+      "Initiatives",
+      "KPIs",
+      "Risks",
+    ],
+    financial: [
+      "KPIs and performance",
+      "Revenue / cost drivers",
+      "Outlook",
+    ],
+  },
+  engineering: {
+    docs: [
+      "System overview",
+      "Key components",
+      "Interfaces",
+      "Implementation notes",
+    ],
+    design: [
+      "Requirements",
+      "Architecture",
+      "Trade-offs",
+      "Risks",
+    ],
+    api: [
+      "Endpoints",
+      "Inputs / outputs",
+      "Authentication",
+      "Errors / limits",
+    ],
+    architecture: [
+      "System diagram references",
+      "Dependencies",
+      "Scalability",
+      "Constraints",
+    ],
+  },
+  finance: {
+    report: [
+      "Statements summary",
+      "Key metrics",
+      "Trends",
+      "Risks",
+    ],
+    investment: [
+      "Thesis",
+      "Catalysts",
+      "Valuation",
+      "Risks",
+    ],
+    economic: [
+      "Research question",
+      "Model / method",
+      "Findings",
+      "Implications",
+    ],
+    portfolio: [
+      "Allocation",
+      "Performance",
+      "Risk exposure",
+      "Rebalancing notes",
+    ],
+  },
+  education: {
+    textbook: [
+      "Chapter outline",
+      "Key concepts",
+      "Definitions",
+      "Review points",
+    ],
+    exam: [
+      "High-yield topics",
+      "Formulas",
+      "Common pitfalls",
+      "Quick review",
+    ],
+    flashcards: [
+      "Q&A pairs",
+      "Key terms",
+      "Definitions",
+    ],
+    study: [
+      "Study plan",
+      "Key concepts",
+      "Practice focus",
+    ],
+  },
+  media: {
+    news: [
+      "Key facts",
+      "Timeline",
+      "Sources",
+      "Impact",
+    ],
+    interview: [
+      "Key quotes",
+      "Themes",
+      "Notable claims",
+    ],
+    press: [
+      "Announcement summary",
+      "Key messages",
+      "Dates / contacts",
+    ],
+    research: [
+      "Background",
+      "Findings",
+      "Context",
+      "Implications",
+    ],
+  },
 };
 
 const normalizeWhitespace = (value: string) =>
@@ -544,13 +820,14 @@ const shouldSkipSentence = (sentence: string) => {
 
 const buildDomainBlock = (
   domain: Exclude<DomainKey, "general" | "smart">,
-  subtype: string,
+  subtypeValue: string,
+  subtypeLabel: string,
   text: string,
 ) => {
   const sections = DOMAIN_SECTIONS[domain];
   if (!sections?.length) return "";
-  const heading = subtype
-    ? `${DOMAIN_TITLES[domain]} — ${subtype}`
+  const heading = subtypeLabel
+    ? `${DOMAIN_TITLES[domain]} — ${subtypeLabel}`
     : DOMAIN_TITLES[domain];
   const sentences = splitSentences(text)
     .map((sentence) => normalizeWhitespace(sentence))
@@ -558,6 +835,18 @@ const buildDomainBlock = (
     .filter((sentence) => !shouldSkipSentence(sentence));
 
   const lines: string[] = [heading];
+  const subtypeKey = subtypeValue.toLowerCase();
+  const specs =
+    (subtypeKey && SUBTYPE_SPECS[domain]?.[subtypeKey]) ||
+    DOMAIN_SPECS[domain] ||
+    [];
+
+  if (specs.length) {
+    lines.push("Specs");
+    specs.forEach((item) => {
+      lines.push(`- ${item}`);
+    });
+  }
 
   sections.forEach((section) => {
     const bullets: string[] = [];
@@ -1006,11 +1295,13 @@ export async function POST(request: Request) {
     domainForBlock = mode as Exclude<DomainKey, "general" | "smart">;
   }
 
-  const blockSubtype = subtypeLabel || subtype;
+  const blockSubtypeLabel = subtypeLabel || subtype;
   const domainBlock = domainForBlock
-    ? buildDomainBlock(domainForBlock, blockSubtype, combined)
+    ? buildDomainBlock(domainForBlock, subtype, blockSubtypeLabel, combined)
     : "";
   const notes = domainBlock ? `${domainBlock}\n\n${baseNotes}` : baseNotes;
 
   return NextResponse.json({ notes, field });
 }
+
+
