@@ -27,7 +27,7 @@ export const translations = {
     "common.stepLabel": "Step {number}",
     "header.converters": "Converters",
     "header.aiNoteMaker": "AI NoteMaker",
-    "header.noteMakerTypes": "Notemaker types",
+    "header.noteMakerTypes": "Notemaker",
     "header.toggleConvertersList": "Toggle converters list",
     "header.toggleMenu": "Toggle menu",
     "header.scrollMore": "Scroll to view more converters.",
@@ -68,7 +68,11 @@ export const translations = {
       "Choose a note style tailored to your field.",
     "aiNoteMaker.subtypeLabel": "Focus",
     "aiNoteMaker.typeGeneral": "General",
-    "aiNoteMaker.typeSmart": "Smart Notes AI",
+    "aiNoteMaker.typeGeneral.description":
+      "Quick notes for any document.",
+    "aiNoteMaker.typeSmart": "Smart AI",
+    "aiNoteMaker.typeSmart.description":
+      "General notes with smart structure.",
     "aiNoteMaker.typeAcademic": "Academic",
     "aiNoteMaker.typeMedical": "Medical",
     "aiNoteMaker.typeLegal": "Legal",
@@ -79,65 +83,133 @@ export const translations = {
     "aiNoteMaker.typeMedia": "Media",
     "aiNoteMaker.group.general.title": "General",
     "aiNoteMaker.group.general.description":
-      "Flexible notes for any document or pasted text.",
+      "Smart AI for any document.",
     "aiNoteMaker.group.academic.title": "Academic",
     "aiNoteMaker.group.academic.description":
-      "Theses, research papers, literature, and lectures.",
+      "Thesis, research, and lectures.",
     "aiNoteMaker.group.medical.title": "Medical",
     "aiNoteMaker.group.medical.description":
-      "Clinical notes, research summaries, and study guides.",
+      "Clinical notes and study guides.",
     "aiNoteMaker.group.legal.title": "Legal",
     "aiNoteMaker.group.legal.description":
-      "Cases, statutes, contracts, and judgments.",
+      "Cases, statutes, and contracts.",
     "aiNoteMaker.group.business.title": "Business",
     "aiNoteMaker.group.business.description":
-      "Meetings, market research, and strategy briefs.",
+      "Meetings, markets, and strategy.",
     "aiNoteMaker.group.engineering.title": "Engineering",
     "aiNoteMaker.group.engineering.description":
-      "Technical docs, designs, and API summaries.",
+      "Docs, designs, and APIs.",
     "aiNoteMaker.group.finance.title": "Finance",
     "aiNoteMaker.group.finance.description":
-      "Reports, investments, and economic analysis.",
+      "Reports, investments, and trends.",
     "aiNoteMaker.group.education.title": "Education",
     "aiNoteMaker.group.education.description":
-      "Textbooks, exams, and study guides.",
+      "Projects, thesis, and note compression.",
     "aiNoteMaker.group.media.title": "Media",
     "aiNoteMaker.group.media.description":
-      "News, interviews, and press briefs.",
+      "News, interviews, and briefs.",
     "aiNoteMaker.subtypeAcademicThesis": "Thesis & Dissertation",
+    "aiNoteMaker.subtypeAcademicThesis.description":
+      "Research goals, methods, outcomes.",
     "aiNoteMaker.subtypeAcademicResearch": "Research Paper",
+    "aiNoteMaker.subtypeAcademicResearch.description":
+      "Methods, results, conclusions.",
     "aiNoteMaker.subtypeAcademicLiterature": "Literature Review",
+    "aiNoteMaker.subtypeAcademicLiterature.description":
+      "Themes, gaps, key sources.",
     "aiNoteMaker.subtypeAcademicLecture": "Lecture / Study Notes",
+    "aiNoteMaker.subtypeAcademicLecture.description":
+      "Lecture highlights for study.",
     "aiNoteMaker.subtypeMedicalClinical": "Clinical Notes",
+    "aiNoteMaker.subtypeMedicalClinical.description":
+      "Symptoms, diagnosis, treatment.",
     "aiNoteMaker.subtypeMedicalCase": "Patient Case Notes",
+    "aiNoteMaker.subtypeMedicalCase.description":
+      "Case context and outcomes.",
     "aiNoteMaker.subtypeMedicalResearch": "Medical Research Summary",
+    "aiNoteMaker.subtypeMedicalResearch.description":
+      "Study findings and limits.",
     "aiNoteMaker.subtypeMedicalDrug": "Drug Information Notes",
+    "aiNoteMaker.subtypeMedicalDrug.description":
+      "Indications and dosage.",
     "aiNoteMaker.subtypeMedicalStudy": "Medical Study Guide",
+    "aiNoteMaker.subtypeMedicalStudy.description":
+      "Key terms and recall.",
     "aiNoteMaker.subtypeLegalCase": "Case Summary",
+    "aiNoteMaker.subtypeLegalCase.description":
+      "Facts, issues, ruling.",
     "aiNoteMaker.subtypeLegalContract": "Contract Analysis",
+    "aiNoteMaker.subtypeLegalContract.description":
+      "Clauses, risks, duties.",
     "aiNoteMaker.subtypeLegalJudgment": "Judgment Breakdown",
+    "aiNoteMaker.subtypeLegalJudgment.description":
+      "Reasoning and legal tests.",
     "aiNoteMaker.subtypeLegalStatute": "Statute Summary",
+    "aiNoteMaker.subtypeLegalStatute.description":
+      "Core provisions and scope.",
     "aiNoteMaker.subtypeLegalStudy": "Law Study Notes",
+    "aiNoteMaker.subtypeLegalStudy.description":
+      "Doctrines and key cases.",
     "aiNoteMaker.subtypeBusinessMeeting": "Meeting Notes",
+    "aiNoteMaker.subtypeBusinessMeeting.description":
+      "Decisions and action items.",
     "aiNoteMaker.subtypeBusinessMarket": "Market Research Notes",
+    "aiNoteMaker.subtypeBusinessMarket.description":
+      "Trends and competitors.",
     "aiNoteMaker.subtypeBusinessStrategy": "Strategy Notes",
+    "aiNoteMaker.subtypeBusinessStrategy.description":
+      "Goals and initiatives.",
     "aiNoteMaker.subtypeBusinessFinancial": "Financial Report Breakdown",
+    "aiNoteMaker.subtypeBusinessFinancial.description":
+      "KPIs and performance.",
     "aiNoteMaker.subtypeEngineeringDocs": "Technical Documentation Notes",
+    "aiNoteMaker.subtypeEngineeringDocs.description":
+      "Specs and implementation.",
     "aiNoteMaker.subtypeEngineeringDesign": "System Design Notes",
+    "aiNoteMaker.subtypeEngineeringDesign.description":
+      "Architecture and trade-offs.",
     "aiNoteMaker.subtypeEngineeringApi": "API Documentation Summary",
+    "aiNoteMaker.subtypeEngineeringApi.description":
+      "Endpoints and payloads.",
     "aiNoteMaker.subtypeEngineeringArchitecture": "Architecture Notes",
+    "aiNoteMaker.subtypeEngineeringArchitecture.description":
+      "Components and dependencies.",
     "aiNoteMaker.subtypeFinanceReport": "Financial Report Notes",
+    "aiNoteMaker.subtypeFinanceReport.description":
+      "Metrics and highlights.",
     "aiNoteMaker.subtypeFinanceInvestment": "Investment Research Summary",
+    "aiNoteMaker.subtypeFinanceInvestment.description":
+      "Thesis and risks.",
     "aiNoteMaker.subtypeFinanceEconomic": "Economic Paper Summary",
+    "aiNoteMaker.subtypeFinanceEconomic.description":
+      "Models and conclusions.",
     "aiNoteMaker.subtypeFinancePortfolio": "Portfolio Analysis Notes",
+    "aiNoteMaker.subtypeFinancePortfolio.description":
+      "Allocation and risk.",
     "aiNoteMaker.subtypeEducationTextbook": "Textbook Chapter Notes",
+    "aiNoteMaker.subtypeEducationTextbook.description":
+      "Key concepts per chapter.",
     "aiNoteMaker.subtypeEducationExam": "Exam Revision Notes",
+    "aiNoteMaker.subtypeEducationExam.description":
+      "High-yield revision points.",
     "aiNoteMaker.subtypeEducationFlashcards": "Flashcards Generator",
+    "aiNoteMaker.subtypeEducationFlashcards.description":
+      "Concepts into Q&A cards.",
     "aiNoteMaker.subtypeEducationStudy": "Study Guide Generator",
+    "aiNoteMaker.subtypeEducationStudy.description":
+      "Structured study guide.",
     "aiNoteMaker.subtypeMediaNews": "News Article Summary",
+    "aiNoteMaker.subtypeMediaNews.description":
+      "Facts and timeline.",
     "aiNoteMaker.subtypeMediaInterview": "Interview Notes",
+    "aiNoteMaker.subtypeMediaInterview.description":
+      "Quotes and themes.",
     "aiNoteMaker.subtypeMediaPress": "Press Brief Summary",
+    "aiNoteMaker.subtypeMediaPress.description":
+      "Announcements and key messages.",
     "aiNoteMaker.subtypeMediaResearch": "Media Research Notes",
+    "aiNoteMaker.subtypeMediaResearch.description":
+      "Insights and context.",
     "aiNoteMaker.detectedField": "Detected field: {field}",
     "aiNoteMaker.downloadNotes": "Download notes",
     "aiNoteMaker.backToInputs": "Back to inputs",

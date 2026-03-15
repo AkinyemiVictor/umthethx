@@ -1,5 +1,16 @@
 import type { TranslationKey } from "./translations";
 
+export type NoteMakerCategoryIconName =
+  | "general"
+  | "academic"
+  | "medical"
+  | "legal"
+  | "business"
+  | "engineering"
+  | "finance"
+  | "education"
+  | "media";
+
 export type NoteMakerMode =
   | "general"
   | "smart"
@@ -16,10 +27,11 @@ export type NoteMakerItem = {
   mode: NoteMakerMode;
   subtype?: string;
   labelKey: TranslationKey;
+  descriptionKey?: TranslationKey;
 };
 
 export type NoteMakerGroup = {
-  id: string;
+  id: NoteMakerCategoryIconName;
   titleKey: TranslationKey;
   descriptionKey?: TranslationKey;
   items: NoteMakerItem[];
@@ -43,60 +55,193 @@ export const noteMakerModeOptions: {
 
 export const noteMakerSubtypeOptions: Record<
   Exclude<NoteMakerMode, "general" | "smart">,
-  { value: string; labelKey: TranslationKey }[]
+  { value: string; labelKey: TranslationKey; descriptionKey: TranslationKey }[]
 > = {
   academic: [
-    { value: "thesis", labelKey: "aiNoteMaker.subtypeAcademicThesis" },
-    { value: "research", labelKey: "aiNoteMaker.subtypeAcademicResearch" },
-    { value: "literature", labelKey: "aiNoteMaker.subtypeAcademicLiterature" },
-    { value: "lecture", labelKey: "aiNoteMaker.subtypeAcademicLecture" },
+    {
+      value: "thesis",
+      labelKey: "aiNoteMaker.subtypeAcademicThesis",
+      descriptionKey: "aiNoteMaker.subtypeAcademicThesis.description",
+    },
+    {
+      value: "research",
+      labelKey: "aiNoteMaker.subtypeAcademicResearch",
+      descriptionKey: "aiNoteMaker.subtypeAcademicResearch.description",
+    },
+    {
+      value: "literature",
+      labelKey: "aiNoteMaker.subtypeAcademicLiterature",
+      descriptionKey: "aiNoteMaker.subtypeAcademicLiterature.description",
+    },
+    {
+      value: "lecture",
+      labelKey: "aiNoteMaker.subtypeAcademicLecture",
+      descriptionKey: "aiNoteMaker.subtypeAcademicLecture.description",
+    },
   ],
   medical: [
-    { value: "clinical", labelKey: "aiNoteMaker.subtypeMedicalClinical" },
-    { value: "case", labelKey: "aiNoteMaker.subtypeMedicalCase" },
-    { value: "research", labelKey: "aiNoteMaker.subtypeMedicalResearch" },
-    { value: "drug", labelKey: "aiNoteMaker.subtypeMedicalDrug" },
-    { value: "study", labelKey: "aiNoteMaker.subtypeMedicalStudy" },
+    {
+      value: "clinical",
+      labelKey: "aiNoteMaker.subtypeMedicalClinical",
+      descriptionKey: "aiNoteMaker.subtypeMedicalClinical.description",
+    },
+    {
+      value: "case",
+      labelKey: "aiNoteMaker.subtypeMedicalCase",
+      descriptionKey: "aiNoteMaker.subtypeMedicalCase.description",
+    },
+    {
+      value: "research",
+      labelKey: "aiNoteMaker.subtypeMedicalResearch",
+      descriptionKey: "aiNoteMaker.subtypeMedicalResearch.description",
+    },
+    {
+      value: "drug",
+      labelKey: "aiNoteMaker.subtypeMedicalDrug",
+      descriptionKey: "aiNoteMaker.subtypeMedicalDrug.description",
+    },
+    {
+      value: "study",
+      labelKey: "aiNoteMaker.subtypeMedicalStudy",
+      descriptionKey: "aiNoteMaker.subtypeMedicalStudy.description",
+    },
   ],
   legal: [
-    { value: "case", labelKey: "aiNoteMaker.subtypeLegalCase" },
-    { value: "contract", labelKey: "aiNoteMaker.subtypeLegalContract" },
-    { value: "judgment", labelKey: "aiNoteMaker.subtypeLegalJudgment" },
-    { value: "statute", labelKey: "aiNoteMaker.subtypeLegalStatute" },
-    { value: "study", labelKey: "aiNoteMaker.subtypeLegalStudy" },
+    {
+      value: "case",
+      labelKey: "aiNoteMaker.subtypeLegalCase",
+      descriptionKey: "aiNoteMaker.subtypeLegalCase.description",
+    },
+    {
+      value: "contract",
+      labelKey: "aiNoteMaker.subtypeLegalContract",
+      descriptionKey: "aiNoteMaker.subtypeLegalContract.description",
+    },
+    {
+      value: "judgment",
+      labelKey: "aiNoteMaker.subtypeLegalJudgment",
+      descriptionKey: "aiNoteMaker.subtypeLegalJudgment.description",
+    },
+    {
+      value: "statute",
+      labelKey: "aiNoteMaker.subtypeLegalStatute",
+      descriptionKey: "aiNoteMaker.subtypeLegalStatute.description",
+    },
+    {
+      value: "study",
+      labelKey: "aiNoteMaker.subtypeLegalStudy",
+      descriptionKey: "aiNoteMaker.subtypeLegalStudy.description",
+    },
   ],
   business: [
-    { value: "meeting", labelKey: "aiNoteMaker.subtypeBusinessMeeting" },
-    { value: "market", labelKey: "aiNoteMaker.subtypeBusinessMarket" },
-    { value: "strategy", labelKey: "aiNoteMaker.subtypeBusinessStrategy" },
-    { value: "financial", labelKey: "aiNoteMaker.subtypeBusinessFinancial" },
+    {
+      value: "meeting",
+      labelKey: "aiNoteMaker.subtypeBusinessMeeting",
+      descriptionKey: "aiNoteMaker.subtypeBusinessMeeting.description",
+    },
+    {
+      value: "market",
+      labelKey: "aiNoteMaker.subtypeBusinessMarket",
+      descriptionKey: "aiNoteMaker.subtypeBusinessMarket.description",
+    },
+    {
+      value: "strategy",
+      labelKey: "aiNoteMaker.subtypeBusinessStrategy",
+      descriptionKey: "aiNoteMaker.subtypeBusinessStrategy.description",
+    },
+    {
+      value: "financial",
+      labelKey: "aiNoteMaker.subtypeBusinessFinancial",
+      descriptionKey: "aiNoteMaker.subtypeBusinessFinancial.description",
+    },
   ],
   engineering: [
-    { value: "docs", labelKey: "aiNoteMaker.subtypeEngineeringDocs" },
-    { value: "design", labelKey: "aiNoteMaker.subtypeEngineeringDesign" },
-    { value: "api", labelKey: "aiNoteMaker.subtypeEngineeringApi" },
+    {
+      value: "docs",
+      labelKey: "aiNoteMaker.subtypeEngineeringDocs",
+      descriptionKey: "aiNoteMaker.subtypeEngineeringDocs.description",
+    },
+    {
+      value: "design",
+      labelKey: "aiNoteMaker.subtypeEngineeringDesign",
+      descriptionKey: "aiNoteMaker.subtypeEngineeringDesign.description",
+    },
+    {
+      value: "api",
+      labelKey: "aiNoteMaker.subtypeEngineeringApi",
+      descriptionKey: "aiNoteMaker.subtypeEngineeringApi.description",
+    },
     {
       value: "architecture",
       labelKey: "aiNoteMaker.subtypeEngineeringArchitecture",
+      descriptionKey: "aiNoteMaker.subtypeEngineeringArchitecture.description",
     },
   ],
   finance: [
-    { value: "report", labelKey: "aiNoteMaker.subtypeFinanceReport" },
-    { value: "investment", labelKey: "aiNoteMaker.subtypeFinanceInvestment" },
-    { value: "economic", labelKey: "aiNoteMaker.subtypeFinanceEconomic" },
-    { value: "portfolio", labelKey: "aiNoteMaker.subtypeFinancePortfolio" },
+    {
+      value: "report",
+      labelKey: "aiNoteMaker.subtypeFinanceReport",
+      descriptionKey: "aiNoteMaker.subtypeFinanceReport.description",
+    },
+    {
+      value: "investment",
+      labelKey: "aiNoteMaker.subtypeFinanceInvestment",
+      descriptionKey: "aiNoteMaker.subtypeFinanceInvestment.description",
+    },
+    {
+      value: "economic",
+      labelKey: "aiNoteMaker.subtypeFinanceEconomic",
+      descriptionKey: "aiNoteMaker.subtypeFinanceEconomic.description",
+    },
+    {
+      value: "portfolio",
+      labelKey: "aiNoteMaker.subtypeFinancePortfolio",
+      descriptionKey: "aiNoteMaker.subtypeFinancePortfolio.description",
+    },
   ],
   education: [
-    { value: "textbook", labelKey: "aiNoteMaker.subtypeEducationTextbook" },
-    { value: "exam", labelKey: "aiNoteMaker.subtypeEducationExam" },
-    { value: "flashcards", labelKey: "aiNoteMaker.subtypeEducationFlashcards" },
-    { value: "study", labelKey: "aiNoteMaker.subtypeEducationStudy" },
+    {
+      value: "textbook",
+      labelKey: "aiNoteMaker.subtypeEducationTextbook",
+      descriptionKey: "aiNoteMaker.subtypeEducationTextbook.description",
+    },
+    {
+      value: "exam",
+      labelKey: "aiNoteMaker.subtypeEducationExam",
+      descriptionKey: "aiNoteMaker.subtypeEducationExam.description",
+    },
+    {
+      value: "flashcards",
+      labelKey: "aiNoteMaker.subtypeEducationFlashcards",
+      descriptionKey: "aiNoteMaker.subtypeEducationFlashcards.description",
+    },
+    {
+      value: "study",
+      labelKey: "aiNoteMaker.subtypeEducationStudy",
+      descriptionKey: "aiNoteMaker.subtypeEducationStudy.description",
+    },
   ],
   media: [
-    { value: "news", labelKey: "aiNoteMaker.subtypeMediaNews" },
-    { value: "interview", labelKey: "aiNoteMaker.subtypeMediaInterview" },
-    { value: "press", labelKey: "aiNoteMaker.subtypeMediaPress" },
-    { value: "research", labelKey: "aiNoteMaker.subtypeMediaResearch" },
+    {
+      value: "news",
+      labelKey: "aiNoteMaker.subtypeMediaNews",
+      descriptionKey: "aiNoteMaker.subtypeMediaNews.description",
+    },
+    {
+      value: "interview",
+      labelKey: "aiNoteMaker.subtypeMediaInterview",
+      descriptionKey: "aiNoteMaker.subtypeMediaInterview.description",
+    },
+    {
+      value: "press",
+      labelKey: "aiNoteMaker.subtypeMediaPress",
+      descriptionKey: "aiNoteMaker.subtypeMediaPress.description",
+    },
+    {
+      value: "research",
+      labelKey: "aiNoteMaker.subtypeMediaResearch",
+      descriptionKey: "aiNoteMaker.subtypeMediaResearch.description",
+    },
   ],
 };
 
@@ -106,8 +251,11 @@ export const noteMakerGroups: NoteMakerGroup[] = [
     titleKey: "aiNoteMaker.group.general.title",
     descriptionKey: "aiNoteMaker.group.general.description",
     items: [
-      { mode: "general", labelKey: "aiNoteMaker.typeGeneral" },
-      { mode: "smart", labelKey: "aiNoteMaker.typeSmart" },
+      {
+        mode: "smart",
+        labelKey: "aiNoteMaker.typeSmart",
+        descriptionKey: "aiNoteMaker.typeSmart.description",
+      },
     ],
   },
   {
@@ -118,6 +266,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "academic",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
   {
@@ -128,6 +277,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "medical",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
   {
@@ -138,6 +288,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "legal",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
   {
@@ -148,6 +299,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "business",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
   {
@@ -158,6 +310,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "engineering",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
   {
@@ -168,6 +321,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "finance",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
   {
@@ -178,6 +332,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "education",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
   {
@@ -188,6 +343,7 @@ export const noteMakerGroups: NoteMakerGroup[] = [
       mode: "media",
       subtype: item.value,
       labelKey: item.labelKey,
+      descriptionKey: item.descriptionKey,
     })),
   },
 ];
@@ -199,4 +355,4 @@ const modeSet = new Set<NoteMakerMode>(
 export const normalizeMode = (value?: string | null): NoteMakerMode =>
   value && modeSet.has(value as NoteMakerMode)
     ? (value as NoteMakerMode)
-    : "general";
+    : "smart";

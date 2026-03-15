@@ -55,7 +55,7 @@ export function AiNoteMakerWorkspace() {
   const [text, setText] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [notes, setNotes] = useState("");
-  const [mode, setMode] = useState<NoteMakerMode>("general");
+  const [mode, setMode] = useState<NoteMakerMode>("smart");
   const [subtype, setSubtype] = useState("");
   const [detectedField, setDetectedField] = useState<string | null>(null);
   const [downloadFormat, setDownloadFormat] = useState<
@@ -574,38 +574,6 @@ export function AiNoteMakerWorkspace() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-                {t("aiNoteMaker.previewTitle")}
-              </div>
-            </div>
-            <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
-              <li className="flex gap-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-zinc-700 dark:bg-[var(--muted)]" />
-                {t("aiNoteMaker.previewBullet1")}
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-zinc-700 dark:bg-[var(--muted)]" />
-                {t("aiNoteMaker.previewBullet2")}
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-zinc-700 dark:bg-[var(--muted)]" />
-                {t("aiNoteMaker.previewBullet3")}
-              </li>
-            </ul>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)]">
-                {t("aiNoteMaker.previewTagSummary")}
-              </span>
-              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)]">
-                {t("aiNoteMaker.previewTagKeyPoints")}
-              </span>
-              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)]">
-                {t("aiNoteMaker.previewTagActionItems")}
-              </span>
-            </div>
-          </div>
         </>
       )}
     </div>

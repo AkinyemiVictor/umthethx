@@ -14,6 +14,7 @@ import {
   normalizeMode,
   type NoteMakerMode,
 } from "../lib/ai-notemaker-types";
+import { NoteMakerCategoryIcon } from "./note-maker-category-icon";
 import {
   getConverterCategoryGroups,
   getConverterHref,
@@ -424,6 +425,9 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             {noteMakerGroups.map((group) => (
               <div key={group.id}>
                 <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-[var(--muted-2)]">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600 dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
+                    <NoteMakerCategoryIcon name={group.id} className="h-3.5 w-3.5" />
+                  </div>
                   <span>{t(group.titleKey)}</span>
                 </div>
                 {group.descriptionKey ? (
@@ -458,7 +462,9 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                           {t(item.labelKey)}
                         </div>
                         <div className="mt-2 text-[11px] text-zinc-500 dark:text-[var(--muted-2)]">
-                          {t(group.titleKey)}
+                          {item.descriptionKey
+                            ? t(item.descriptionKey)
+                            : t(group.descriptionKey ?? group.titleKey)}
                         </div>
                       </Link>
                     );
