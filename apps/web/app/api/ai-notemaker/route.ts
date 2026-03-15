@@ -1010,7 +1010,7 @@ const decodeXmlEntities = (value: string) =>
 
 const extractTextFromPdf = async (file: File) => {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const parser = new PDFParse({ data: buffer });
+  const parser = new PDFParse({ data: buffer, disableWorker: true });
   try {
     const parsed = await parser.getText();
     return parsed.text?.trim() ?? "";
