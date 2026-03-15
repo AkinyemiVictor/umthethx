@@ -1536,7 +1536,11 @@ const buildNotes = (text: string): NotesResponse => {
   let prevBlank = true;
 
   const addSection = (heading: HeadingMatch) => {
-    while (stack.length && stack[stack.length - 1].level >= heading.level) {
+    while (stack.length) {
+      const last = stack[stack.length - 1];
+      if (!last || last.level < heading.level) {
+        break;
+      }
       stack.pop();
     }
     const parent = stack[stack.length - 1] ?? root;
