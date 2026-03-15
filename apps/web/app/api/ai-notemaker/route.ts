@@ -295,6 +295,16 @@ const DOMAIN_SECTIONS: Record<
   ],
 };
 
+type SectionDef = {
+  title: string;
+  keywords: string[];
+  required?: boolean;
+  useCitations?: boolean;
+  limit?: number;
+};
+
+const DEFAULT_SECTION_LIMIT = 6;
+
 const DOMAIN_SPECS: Record<
   Exclude<DomainKey, "general" | "smart">,
   string[]
@@ -567,6 +577,283 @@ const SUBTYPE_SPECS: Record<
   },
 };
 
+const SUBTYPE_SECTION_OVERRIDES: Record<
+  Exclude<DomainKey, "general" | "smart">,
+  Record<string, SectionDef[]>
+> = {
+  academic: {
+    thesis: [
+      { title: "Research Topic", keywords: ["topic", "research"], required: true },
+      {
+        title: "Problem Statement",
+        keywords: ["problem", "gap", "challenge", "issue"],
+        required: true,
+      },
+      {
+        title: "Objectives / Hypotheses",
+        keywords: ["objective", "aim", "goal", "hypothesis"],
+        required: true,
+      },
+      { title: "Methodology", keywords: ["method", "methodology", "design"], required: true },
+      { title: "Key Findings", keywords: ["finding", "result", "outcome"], required: true },
+      { title: "Contributions", keywords: ["contribution", "significance", "novel"], required: true },
+      { title: "Limitations", keywords: ["limitation", "constraint"], required: true },
+      { title: "Future Research", keywords: ["future", "further research"], required: true },
+      {
+        title: "Citations / References",
+        keywords: ["citation", "reference", "doi", "et al", "journal"],
+        required: true,
+        useCitations: true,
+      },
+    ],
+    research: [
+      { title: "Research Topic", keywords: ["topic", "research"], required: true },
+      { title: "Methodology", keywords: ["method", "methodology", "design"], required: true },
+      { title: "Key Findings", keywords: ["finding", "result", "outcome"], required: true },
+      { title: "Limitations", keywords: ["limitation", "constraint"], required: true },
+      {
+        title: "Citations / References",
+        keywords: ["citation", "reference", "doi", "et al", "journal"],
+        required: true,
+        useCitations: true,
+      },
+    ],
+    literature: [
+      { title: "Themes", keywords: ["theme", "trend", "pattern"], required: true },
+      { title: "Key Sources", keywords: ["source", "author", "study"], required: true },
+      { title: "Research Gaps", keywords: ["gap", "limited", "future"], required: true },
+      { title: "Synthesis", keywords: ["synthesis", "summary", "conclusion"], required: true },
+      {
+        title: "Citations / References",
+        keywords: ["citation", "reference", "doi", "et al", "journal"],
+        required: true,
+        useCitations: true,
+      },
+    ],
+    lecture: [
+      { title: "Key Concepts", keywords: ["concept", "idea", "principle"], required: true },
+      { title: "Definitions / Formulas", keywords: ["definition", "formula", "equation"], required: true },
+      { title: "Study Takeaways", keywords: ["takeaway", "remember", "exam"], required: true },
+    ],
+  },
+  medical: {
+    clinical: [
+      { title: "Clinical Context", keywords: ["history", "context", "presentation"], required: true },
+      { title: "Symptoms / Conditions", keywords: ["symptom", "condition"], required: true },
+      { title: "Diagnostic Findings", keywords: ["diagnosis", "diagnostic", "lab", "imaging"], required: true },
+      { title: "Treatment / Recommendations", keywords: ["treatment", "therapy", "plan"], required: true },
+      { title: "Medications", keywords: ["medication", "drug", "dosage"], required: true },
+    ],
+    case: [
+      { title: "Case Context", keywords: ["case", "history", "presentation"], required: true },
+      { title: "Findings", keywords: ["finding", "result", "exam"], required: true },
+      { title: "Interventions", keywords: ["intervention", "procedure", "treatment"], required: true },
+      { title: "Outcome / Follow-up", keywords: ["outcome", "follow-up", "recovery"], required: true },
+    ],
+    research: [
+      { title: "Study Design", keywords: ["study", "design", "trial"], required: true },
+      { title: "Population / Sample", keywords: ["population", "sample", "cohort"], required: true },
+      { title: "Key Results", keywords: ["result", "finding", "outcome"], required: true },
+      { title: "Clinical Implications", keywords: ["implication", "clinical", "practice"], required: true },
+      { title: "Limitations", keywords: ["limitation", "constraint"], required: true },
+    ],
+    drug: [
+      { title: "Indications", keywords: ["indication", "use", "treat"], required: true },
+      { title: "Dosage / Route", keywords: ["dose", "dosage", "route"], required: true },
+      { title: "Contraindications", keywords: ["contraindication", "avoid"], required: true },
+      { title: "Side Effects", keywords: ["side effect", "adverse"], required: true },
+      { title: "Interactions", keywords: ["interaction", "contra", "combine"], required: true },
+    ],
+    study: [
+      { title: "Key Terms", keywords: ["term", "definition"], required: true },
+      { title: "Mechanisms", keywords: ["mechanism", "pathway"], required: true },
+      { title: "High-Yield Points", keywords: ["high-yield", "exam", "remember"], required: true },
+    ],
+  },
+  legal: {
+    case: [
+      { title: "Case Name", keywords: ["v.", "vs.", "case"], required: true },
+      { title: "Facts", keywords: ["fact", "background"], required: true },
+      { title: "Legal Issues", keywords: ["issue", "question"], required: true },
+      { title: "Applicable Laws", keywords: ["statute", "act", "section"], required: true },
+      { title: "Decision", keywords: ["held", "decision", "judgment"], required: true },
+      { title: "Reasoning", keywords: ["reason", "analysis"], required: true },
+      { title: "Precedents", keywords: ["precedent", "authority", "case"], required: true },
+    ],
+    contract: [
+      { title: "Parties", keywords: ["party", "parties", "seller", "buyer"], required: true },
+      { title: "Scope", keywords: ["scope", "services", "deliverable"], required: true },
+      { title: "Key Clauses", keywords: ["clause", "term", "condition"], required: true },
+      { title: "Obligations", keywords: ["obligation", "duty", "shall"], required: true },
+      { title: "Risks", keywords: ["risk", "liability", "indemn"], required: true },
+      { title: "Termination", keywords: ["termination", "terminate", "expiry"], required: true },
+    ],
+    judgment: [
+      { title: "Decision", keywords: ["decision", "judgment", "order"], required: true },
+      { title: "Legal Tests", keywords: ["test", "standard", "criteria"], required: true },
+      { title: "Reasoning", keywords: ["reason", "analysis"], required: true },
+      { title: "Orders", keywords: ["order", "remedy", "relief"], required: true },
+      { title: "Precedents", keywords: ["precedent", "authority", "case"], required: true },
+    ],
+    statute: [
+      { title: "Purpose", keywords: ["purpose", "aim", "intent"], required: true },
+      { title: "Key Sections", keywords: ["section", "article", "provision"], required: true },
+      { title: "Definitions", keywords: ["definition", "means", "interpretation"], required: true },
+      { title: "Penalties / Remedies", keywords: ["penalty", "fine", "remedy"], required: true },
+      { title: "Application Notes", keywords: ["apply", "scope", "jurisdiction"], required: true },
+    ],
+    study: [
+      { title: "Doctrines / Principles", keywords: ["doctrine", "principle"], required: true },
+      { title: "Elements / Tests", keywords: ["element", "test", "standard"], required: true },
+      { title: "Key Cases", keywords: ["case", "precedent"], required: true },
+    ],
+  },
+  business: {
+    meeting: [
+      { title: "Agenda", keywords: ["agenda", "topic"], required: true },
+      { title: "Decisions", keywords: ["decision", "agreed"], required: true },
+      { title: "Action Items", keywords: ["action", "next steps"], required: true },
+      { title: "Owners / Deadlines", keywords: ["owner", "due", "deadline"], required: true },
+    ],
+    market: [
+      { title: "Market Overview", keywords: ["market", "overview"], required: true },
+      { title: "Trends", keywords: ["trend", "growth", "decline"], required: true },
+      { title: "Competitors", keywords: ["competitor", "rival"], required: true },
+      { title: "Customer Insights", keywords: ["customer", "buyer", "segment"], required: true },
+      { title: "Opportunities", keywords: ["opportunity", "gap", "potential"], required: true },
+    ],
+    strategy: [
+      { title: "Objectives", keywords: ["objective", "goal"], required: true },
+      { title: "Initiatives", keywords: ["initiative", "strategy"], required: true },
+      { title: "KPIs", keywords: ["kpi", "metric"], required: true },
+      { title: "Risks", keywords: ["risk", "challenge"], required: true },
+    ],
+    financial: [
+      { title: "Key Metrics", keywords: ["kpi", "metric", "margin"], required: true },
+      { title: "Performance Drivers", keywords: ["driver", "revenue", "cost"], required: true },
+      { title: "Risks", keywords: ["risk", "volatility"], required: true },
+      { title: "Outlook", keywords: ["outlook", "forecast", "guidance"], required: true },
+    ],
+  },
+  engineering: {
+    docs: [
+      { title: "System Overview", keywords: ["system", "overview"], required: true },
+      { title: "Key Components", keywords: ["component", "module", "service"], required: true },
+      { title: "Interfaces", keywords: ["interface", "api", "endpoint"], required: true },
+      { title: "Implementation Notes", keywords: ["implementation", "algorithm"], required: true },
+    ],
+    design: [
+      { title: "Requirements", keywords: ["requirement", "need"], required: true },
+      { title: "Architecture", keywords: ["architecture", "design"], required: true },
+      { title: "Trade-offs", keywords: ["trade-off", "tradeoff", "decision"], required: true },
+      { title: "Risks", keywords: ["risk", "constraint"], required: true },
+    ],
+    api: [
+      { title: "Endpoints", keywords: ["endpoint", "route"], required: true },
+      { title: "Inputs / Outputs", keywords: ["request", "response", "payload"], required: true },
+      { title: "Authentication", keywords: ["auth", "token", "key"], required: true },
+      { title: "Errors / Limits", keywords: ["error", "limit", "rate"], required: true },
+    ],
+    architecture: [
+      { title: "Components", keywords: ["component", "service", "module"], required: true },
+      { title: "Data Flow", keywords: ["data flow", "pipeline"], required: true },
+      { title: "Scalability", keywords: ["scale", "scalability"], required: true },
+      { title: "Constraints", keywords: ["constraint", "limit"], required: true },
+    ],
+  },
+  finance: {
+    report: [
+      { title: "Statements Summary", keywords: ["balance sheet", "income", "cash flow"], required: true },
+      { title: "Key Metrics", keywords: ["metric", "ratio", "margin"], required: true },
+      { title: "Trends", keywords: ["trend", "growth", "decline"], required: true },
+      { title: "Risks", keywords: ["risk", "volatility"], required: true },
+      { title: "Outlook", keywords: ["outlook", "forecast"], required: true },
+    ],
+    investment: [
+      { title: "Thesis", keywords: ["thesis", "rationale"], required: true },
+      { title: "Catalysts", keywords: ["catalyst", "driver"], required: true },
+      { title: "Valuation", keywords: ["valuation", "multiple", "price"], required: true },
+      { title: "Risks", keywords: ["risk", "downside"], required: true },
+    ],
+    economic: [
+      { title: "Research Question", keywords: ["question", "objective"], required: true },
+      { title: "Model / Method", keywords: ["model", "method", "approach"], required: true },
+      { title: "Findings", keywords: ["finding", "result"], required: true },
+      { title: "Implications", keywords: ["implication", "policy"], required: true },
+    ],
+    portfolio: [
+      { title: "Allocation", keywords: ["allocation", "weight"], required: true },
+      { title: "Performance", keywords: ["performance", "return"], required: true },
+      { title: "Risk Exposure", keywords: ["risk", "exposure", "volatility"], required: true },
+      { title: "Rebalancing Notes", keywords: ["rebalance", "adjust"], required: true },
+    ],
+  },
+  education: {
+    textbook: [
+      { title: "Chapter Outline", keywords: ["chapter", "outline"], required: true },
+      { title: "Key Concepts", keywords: ["concept", "idea"], required: true },
+      { title: "Definitions", keywords: ["definition", "term"], required: true },
+      { title: "Review Points", keywords: ["review", "remember"], required: true },
+    ],
+    exam: [
+      { title: "High-Yield Topics", keywords: ["high-yield", "important"], required: true },
+      { title: "Formulas", keywords: ["formula", "equation"], required: true },
+      { title: "Common Pitfalls", keywords: ["pitfall", "mistake"], required: true },
+      { title: "Quick Review", keywords: ["quick", "summary"], required: true },
+    ],
+    flashcards: [
+      { title: "Q&A", keywords: ["question", "answer"], required: true },
+      { title: "Key Terms", keywords: ["term", "definition"], required: true },
+      { title: "Definitions", keywords: ["definition", "means"], required: true },
+    ],
+    study: [
+      { title: "Study Plan", keywords: ["plan", "schedule"], required: true },
+      { title: "Key Concepts", keywords: ["concept", "idea"], required: true },
+      { title: "Practice Focus", keywords: ["practice", "exercise"], required: true },
+    ],
+  },
+  media: {
+    news: [
+      { title: "Key Facts", keywords: ["fact", "reported", "confirmed"], required: true },
+      { title: "Timeline", keywords: ["timeline", "date"], required: true },
+      { title: "Sources", keywords: ["source", "official"], required: true },
+      { title: "Implications", keywords: ["impact", "implication"], required: true },
+    ],
+    interview: [
+      { title: "Key Quotes", keywords: ["quote", "\"", "said"], required: true },
+      { title: "Themes", keywords: ["theme", "topic"], required: true },
+      { title: "Notable Claims", keywords: ["claim", "statement"], required: true },
+    ],
+    press: [
+      { title: "Announcement Summary", keywords: ["announce", "launch", "release"], required: true },
+      { title: "Key Messages", keywords: ["message", "highlight"], required: true },
+      { title: "Dates / Contacts", keywords: ["date", "contact", "email"], required: true },
+    ],
+    research: [
+      { title: "Background", keywords: ["background", "context"], required: true },
+      { title: "Findings", keywords: ["finding", "result"], required: true },
+      { title: "Context", keywords: ["context", "environment"], required: true },
+      { title: "Implications", keywords: ["impact", "implication"], required: true },
+    ],
+  },
+};
+
+const getSectionDefinitions = (
+  domain: Exclude<DomainKey, "general" | "smart">,
+  subtypeValue: string,
+): SectionDef[] => {
+  const subtypeKey = subtypeValue.toLowerCase();
+  const override = SUBTYPE_SECTION_OVERRIDES[domain]?.[subtypeKey];
+  if (override?.length) {
+    return override;
+  }
+  return DOMAIN_SECTIONS[domain].map((section) => ({
+    ...section,
+    useCitations:
+      domain === "academic" && section.title === "Citations / References",
+  }));
+};
+
 const normalizeWhitespace = (value: string) =>
   value.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 
@@ -765,6 +1052,50 @@ const annotateBullet = (value: string) => {
   return value;
 };
 
+const citationSignals = [
+  /doi:/i,
+  /\bdoi\b/i,
+  /\bISBN\b/i,
+  /\bISSN\b/i,
+  /\bvol\.?\b/i,
+  /\bno\.?\b/i,
+  /\bpp\.\b/i,
+  /\bRetrieved from\b/i,
+  /\bAvailable at\b/i,
+  /https?:\/\//i,
+];
+const citationYearPattern = /\b(19|20)\d{2}\b/;
+const citationNumberedPattern = /^\[\d+\]/;
+const citationAuthorPattern = /^[A-Z][A-Za-z-]+,?\s+[A-Z]/;
+
+const isCitationLine = (line: string) => {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length < 8 || trimmed.length > 220) {
+    return false;
+  }
+  if (citationNumberedPattern.test(trimmed)) return true;
+  if (citationSignals.some((pattern) => pattern.test(trimmed))) return true;
+  if (citationYearPattern.test(trimmed) && citationAuthorPattern.test(trimmed)) {
+    return true;
+  }
+  return false;
+};
+
+const extractCitations = (text: string) => {
+  const lines = text.split(/\r?\n+/);
+  const seen = new Set<string>();
+  const citations: string[] = [];
+  lines.forEach((line) => {
+    if (!isCitationLine(line)) return;
+    const cleaned = normalizeWhitespace(line);
+    const key = cleaned.toLowerCase();
+    if (!cleaned || seen.has(key)) return;
+    seen.add(key);
+    citations.push(cleaned);
+  });
+  return citations;
+};
+
 const DOMAIN_TITLES: Record<Exclude<DomainKey, "smart">, string> = {
   general: "General Notes",
   academic: "Academic Notes",
@@ -823,8 +1154,10 @@ const buildDomainBlock = (
   subtypeValue: string,
   subtypeLabel: string,
   text: string,
+  specsLabel: string,
+  missingLabel: string,
 ) => {
-  const sections = DOMAIN_SECTIONS[domain];
+  const sections = getSectionDefinitions(domain, subtypeValue);
   if (!sections?.length) return "";
   const heading = subtypeLabel
     ? `${DOMAIN_TITLES[domain]} — ${subtypeLabel}`
@@ -833,6 +1166,7 @@ const buildDomainBlock = (
     .map((sentence) => normalizeWhitespace(sentence))
     .filter(Boolean)
     .filter((sentence) => !shouldSkipSentence(sentence));
+  const citations = extractCitations(text);
 
   const lines: string[] = [heading];
   const subtypeKey = subtypeValue.toLowerCase();
@@ -842,7 +1176,7 @@ const buildDomainBlock = (
     [];
 
   if (specs.length) {
-    lines.push("Specs");
+    lines.push(specsLabel);
     specs.forEach((item) => {
       lines.push(`- ${item}`);
     });
@@ -850,21 +1184,29 @@ const buildDomainBlock = (
 
   sections.forEach((section) => {
     const bullets: string[] = [];
-    const seen = new Set<string>();
-    const keywords = section.keywords.map((keyword) => keyword.toLowerCase());
-    sentences.forEach((sentence) => {
-      const lower = sentence.toLowerCase();
-      if (!keywords.some((keyword) => lower.includes(keyword))) return;
-      const normalized = lower.trim();
-      if (seen.has(normalized)) return;
-      seen.add(normalized);
-      bullets.push(annotateBullet(sentence));
-    });
+    if (section.useCitations) {
+      citations.forEach((citation) => bullets.push(citation));
+    } else {
+      const seen = new Set<string>();
+      const keywords = section.keywords.map((keyword) => keyword.toLowerCase());
+      sentences.forEach((sentence) => {
+        const lower = sentence.toLowerCase();
+        if (!keywords.some((keyword) => lower.includes(keyword))) return;
+        const normalized = lower.trim();
+        if (seen.has(normalized)) return;
+        seen.add(normalized);
+        bullets.push(annotateBullet(sentence));
+      });
+    }
     if (bullets.length) {
       lines.push(section.title);
-      bullets.slice(0, 6).forEach((bullet) => {
+      const limit = section.limit ?? DEFAULT_SECTION_LIMIT;
+      bullets.slice(0, limit).forEach((bullet) => {
         lines.push(`- ${bullet}`);
       });
+    } else if (section.required) {
+      lines.push(section.title);
+      lines.push(`- ${missingLabel}`);
     }
   });
 
@@ -1159,6 +1501,8 @@ export async function POST(request: Request) {
   let mode: DomainKey = "general";
   let subtype = "";
   let subtypeLabel = "";
+  let specsLabel = "Specs";
+  let missingLabel = "Not found.";
   const files: File[] = [];
 
   if (contentType.includes("multipart/form-data")) {
@@ -1179,6 +1523,14 @@ export async function POST(request: Request) {
     if (typeof subtypeLabelValue === "string") {
       subtypeLabel = subtypeLabelValue;
     }
+    const specsLabelValue = form.get("specsLabel");
+    if (typeof specsLabelValue === "string" && specsLabelValue.trim()) {
+      specsLabel = specsLabelValue.trim();
+    }
+    const missingLabelValue = form.get("missingLabel");
+    if (typeof missingLabelValue === "string" && missingLabelValue.trim()) {
+      missingLabel = missingLabelValue.trim();
+    }
     form.getAll("files").forEach((entry) => {
       if (entry instanceof File) {
         files.push(entry);
@@ -1191,11 +1543,19 @@ export async function POST(request: Request) {
         mode?: DomainKey;
         subtype?: string;
         subtypeLabel?: string;
+        specsLabel?: string;
+        missingLabel?: string;
       };
       text = payload.text ?? "";
       mode = normalizeMode(payload.mode);
       subtype = payload.subtype ?? "";
       subtypeLabel = payload.subtypeLabel ?? "";
+      if (payload.specsLabel?.trim()) {
+        specsLabel = payload.specsLabel.trim();
+      }
+      if (payload.missingLabel?.trim()) {
+        missingLabel = payload.missingLabel.trim();
+      }
     } catch {
       return NextResponse.json(
         { error: "Invalid JSON payload." },
@@ -1297,7 +1657,14 @@ export async function POST(request: Request) {
 
   const blockSubtypeLabel = subtypeLabel || subtype;
   const domainBlock = domainForBlock
-    ? buildDomainBlock(domainForBlock, subtype, blockSubtypeLabel, combined)
+    ? buildDomainBlock(
+        domainForBlock,
+        subtype,
+        blockSubtypeLabel,
+        combined,
+        specsLabel,
+        missingLabel,
+      )
     : "";
   const notes = domainBlock ? `${domainBlock}\n\n${baseNotes}` : baseNotes;
 

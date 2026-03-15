@@ -203,6 +203,8 @@ export function AiNoteMakerWorkspace() {
         formData.append("text", trimmed);
       }
       formData.append("mode", mode);
+      formData.append("specsLabel", t("aiNoteMaker.specsLabel"));
+      formData.append("missingLabel", t("aiNoteMaker.notFoundLabel"));
       if (subtype) {
         formData.append("subtype", subtype);
         if (subtypeLabel) {

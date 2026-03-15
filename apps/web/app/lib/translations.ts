@@ -214,6 +214,8 @@ export const translations = {
     "aiNoteMaker.downloadNotes": "Download notes",
     "aiNoteMaker.backToInputs": "Back to inputs",
     "aiNoteMaker.supportedFormats": "Accepted formats: PDF, DOCX, TXT.",
+    "aiNoteMaker.specsLabel": "Specs",
+    "aiNoteMaker.notFoundLabel": "Not found.",
     "aiNoteMaker.errorEmpty": "Paste text or upload a document to generate notes.",
     "aiNoteMaker.errorTooShort": "Add a bit more text or upload a document.",
     "aiNoteMaker.errorRequestFailed": "Unable to generate notes right now.",
