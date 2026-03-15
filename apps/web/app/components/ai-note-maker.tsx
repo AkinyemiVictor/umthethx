@@ -335,9 +335,11 @@ export function AiNoteMakerWorkspace() {
 
         notes.split("\n").forEach((line) => wrapLine(line));
         const pdfBytes = await pdfDoc.save();
-        downloadBlob(
-          new Blob([pdfBytes], { type: "application/pdf" }),
+        const pdfBuffer = pdfBytes.buffer.slice(
+          pdfBytes.byteOffset,
+          pdfBytes.byteOffset + pdfBytes.byteLength,
         );
+        downloadBlob(new Blob([pdfBuffer], { type: "application/pdf" }));
       })
       .catch(() => {
         setError(t("aiNoteMaker.errorRequestFailed"));
