@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 import JSZip from "jszip";
 
 type DomainKey =
@@ -1010,8 +1010,13 @@ const decodeXmlEntities = (value: string) =>
 
 const extractTextFromPdf = async (file: File) => {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const parsed = await pdfParse(buffer);
-  return parsed.text?.trim() ?? "";
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const parsed = await parser.getText();
+    return parsed.text?.trim() ?? "";
+  } finally {
+    await parser.destroy();
+  }
 };
 
 const extractTextFromTxt = async (file: File) => {
