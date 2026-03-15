@@ -895,6 +895,97 @@ const splitSentences = (text: string) => {
 const tokenize = (value: string) =>
   value.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
 
+const stemToken = (value: string) => {
+  let word = value.toLowerCase();
+  if (word.length > 7 && word.endsWith("ments")) {
+    word = word.slice(0, -5);
+  } else if (word.length > 6 && word.endsWith("ment")) {
+    word = word.slice(0, -4);
+  }
+  if (word.length > 6 && (word.endsWith("tion") || word.endsWith("sion"))) {
+    word = word.slice(0, -3);
+  }
+  if (word.length > 5 && word.endsWith("ing")) {
+    word = word.slice(0, -3);
+  }
+  if (word.length > 4 && word.endsWith("ies")) {
+    word = word.slice(0, -3);
+  }
+  if (word.length > 4 && word.endsWith("ed")) {
+    word = word.slice(0, -2);
+  }
+  if (word.length > 4 && word.endsWith("es")) {
+    word = word.slice(0, -2);
+  }
+  if (word.length > 3 && word.endsWith("s")) {
+    word = word.slice(0, -1);
+  }
+  return word;
+};
+
+const buildTokenData = (value: string) => {
+  const tokens = tokenize(value);
+  return {
+    tokens,
+    tokenSet: new Set(tokens),
+    stemSet: new Set(tokens.map((token) => stemToken(token))),
+  };
+};
+
+const boundedEditDistance = (a: string, b: string, maxDist: number) => {
+  const aLen = a.length;
+  const bLen = b.length;
+  if (Math.abs(aLen - bLen) > maxDist) return maxDist + 1;
+  const prev = new Array(bLen + 1);
+  const curr = new Array(bLen + 1);
+  for (let j = 0; j <= bLen; j += 1) {
+    prev[j] = j;
+  }
+  for (let i = 1; i <= aLen; i += 1) {
+    curr[0] = i;
+    let rowMin = curr[0];
+    const aChar = a[i - 1];
+    for (let j = 1; j <= bLen; j += 1) {
+      const cost = aChar === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + cost,
+      );
+      if (curr[j] < rowMin) rowMin = curr[j];
+    }
+    if (rowMin > maxDist) return maxDist + 1;
+    for (let j = 0; j <= bLen; j += 1) {
+      prev[j] = curr[j];
+    }
+  }
+  return prev[bLen];
+};
+
+const isSimilarToken = (keyword: string, token: string) => {
+  if (keyword === token) return true;
+  if (keyword.length <= 2 || token.length <= 2) return false;
+  const maxDist = keyword.length <= 5 ? 1 : 2;
+  if (Math.abs(keyword.length - token.length) > maxDist) return false;
+  return boundedEditDistance(keyword, token, maxDist) <= maxDist;
+};
+
+const keywordMatchesText = (
+  keyword: string,
+  textLower: string,
+  tokenData: { tokens: string[]; tokenSet: Set<string>; stemSet: Set<string> },
+) => {
+  const normalized = keyword.toLowerCase();
+  if (!normalized) return false;
+  if (normalized.includes(" ")) {
+    return textLower.includes(normalized);
+  }
+  if (tokenData.tokenSet.has(normalized)) return true;
+  const stem = stemToken(normalized);
+  if (tokenData.stemSet.has(stem)) return true;
+  return tokenData.tokens.some((token) => isSimilarToken(normalized, token));
+};
+
 const countWords = (value: string) => tokenize(value).length;
 
 const getFileExtension = (name: string) =>
@@ -1108,24 +1199,34 @@ const DOMAIN_TITLES: Record<Exclude<DomainKey, "smart">, string> = {
   media: "Media Notes",
 };
 
-const countKeywordHits = (text: string, keywords: string[]) => {
-  const normalized = text.toLowerCase();
-  return keywords.reduce((count, keyword) => {
-    if (normalized.includes(keyword)) {
+const countKeywordHitsWithTokens = (
+  keywords: string[],
+  textLower: string,
+  tokenData: { tokens: string[]; tokenSet: Set<string>; stemSet: Set<string> },
+) =>
+  keywords.reduce((count, keyword) => {
+    if (keywordMatchesText(keyword, textLower, tokenData)) {
       return count + 1;
     }
     return count;
   }, 0);
+
+const countKeywordHits = (text: string, keywords: string[]) => {
+  const normalized = text.toLowerCase();
+  const tokenData = buildTokenData(normalized);
+  return countKeywordHitsWithTokens(keywords, normalized, tokenData);
 };
 
 const detectDomain = (text: string): Exclude<DomainKey, "smart"> => {
   const candidates = Object.entries(DOMAIN_KEYWORDS).filter(
     ([key]) => key !== "general",
   ) as Array<[Exclude<DomainKey, "general" | "smart">, string[]]>;
+  const normalized = text.toLowerCase();
+  const tokenData = buildTokenData(normalized);
   let best: Exclude<DomainKey, "smart"> = "general";
   let bestScore = 0;
   for (const [domain, keywords] of candidates) {
-    const score = countKeywordHits(text, keywords);
+    const score = countKeywordHitsWithTokens(keywords, normalized, tokenData);
     if (score > bestScore) {
       bestScore = score;
       best = domain;
@@ -1166,6 +1267,14 @@ const buildDomainBlock = (
     .map((sentence) => normalizeWhitespace(sentence))
     .filter(Boolean)
     .filter((sentence) => !shouldSkipSentence(sentence));
+  const sentenceEntries = sentences.map((sentence) => {
+    const lower = sentence.toLowerCase();
+    return {
+      sentence,
+      lower,
+      tokenData: buildTokenData(lower),
+    };
+  });
   const citations = extractCitations(text);
 
   const lines: string[] = [heading];
@@ -1189,9 +1298,10 @@ const buildDomainBlock = (
     } else {
       const seen = new Set<string>();
       const keywords = section.keywords.map((keyword) => keyword.toLowerCase());
-      sentences.forEach((sentence) => {
-        const lower = sentence.toLowerCase();
-        if (!keywords.some((keyword) => lower.includes(keyword))) return;
+      sentenceEntries.forEach(({ sentence, lower, tokenData }) => {
+        if (!keywords.some((keyword) => keywordMatchesText(keyword, lower, tokenData))) {
+          return;
+        }
         const normalized = lower.trim();
         if (seen.has(normalized)) return;
         seen.add(normalized);
