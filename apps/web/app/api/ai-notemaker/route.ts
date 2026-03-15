@@ -2,10 +2,41 @@ import { NextResponse } from "next/server";
 import pdfParse from "pdf-parse";
 import JSZip from "jszip";
 
+type DomainKey =
+  | "general"
+  | "smart"
+  | "academic"
+  | "medical"
+  | "legal"
+  | "business"
+  | "engineering"
+  | "finance"
+  | "education"
+  | "media";
+
+const DOMAIN_VALUES = new Set<DomainKey>([
+  "general",
+  "smart",
+  "academic",
+  "medical",
+  "legal",
+  "business",
+  "engineering",
+  "finance",
+  "education",
+  "media",
+]);
+
+const normalizeMode = (value: DomainKey | string | undefined) =>
+  value && DOMAIN_VALUES.has(value as DomainKey)
+    ? (value as DomainKey)
+    : "general";
+
 export const runtime = "nodejs";
 
 type NotesResponse = {
   notes: string;
+  field?: DomainKey;
 };
 
 const MIN_WORDS = 30;
@@ -70,6 +101,195 @@ const STOP_WORDS = new Set([
   "you",
   "your",
 ]);
+
+const DOMAIN_KEYWORDS: Record<Exclude<DomainKey, "smart">, string[]> = {
+  general: [],
+  academic: [
+    "thesis",
+    "dissertation",
+    "literature",
+    "methodology",
+    "hypothesis",
+    "research",
+    "citation",
+    "abstract",
+  ],
+  medical: [
+    "patient",
+    "clinical",
+    "diagnosis",
+    "symptom",
+    "treatment",
+    "therapy",
+    "medication",
+    "dosage",
+    "mg",
+    "icd",
+  ],
+  legal: [
+    "court",
+    "judgment",
+    "plaintiff",
+    "defendant",
+    "statute",
+    "section",
+    "act",
+    "contract",
+    "case",
+    "v.",
+  ],
+  business: [
+    "market",
+    "revenue",
+    "strategy",
+    "kpi",
+    "stakeholder",
+    "profit",
+    "meeting",
+    "forecast",
+  ],
+  engineering: [
+    "architecture",
+    "system",
+    "api",
+    "implementation",
+    "specification",
+    "module",
+    "performance",
+    "scalability",
+  ],
+  finance: [
+    "balance sheet",
+    "income statement",
+    "cash flow",
+    "investment",
+    "portfolio",
+    "equity",
+    "bond",
+    "inflation",
+    "interest rate",
+  ],
+  education: [
+    "curriculum",
+    "lesson",
+    "exam",
+    "study",
+    "learning outcomes",
+    "assessment",
+  ],
+  media: [
+    "interview",
+    "press",
+    "headline",
+    "reporter",
+    "quote",
+    "timeline",
+    "breaking",
+  ],
+};
+
+const DOMAIN_SECTIONS: Record<
+  Exclude<DomainKey, "general" | "smart">,
+  { title: string; keywords: string[] }[]
+> = {
+  academic: [
+    { title: "Research Topic", keywords: ["topic", "research", "study"] },
+    {
+      title: "Problem Statement",
+      keywords: ["problem", "gap", "challenge", "issue"],
+    },
+    {
+      title: "Objectives / Hypotheses",
+      keywords: ["objective", "aim", "goal", "hypothesis"],
+    },
+    { title: "Methodology", keywords: ["method", "methodology", "design"] },
+    {
+      title: "Key Findings",
+      keywords: ["finding", "result", "outcome", "evidence"],
+    },
+    {
+      title: "Contributions",
+      keywords: ["contribution", "significance", "novel"],
+    },
+    { title: "Limitations", keywords: ["limitation", "constraint"] },
+    {
+      title: "Future Research",
+      keywords: ["future", "further research", "next steps"],
+    },
+    { title: "Key Terminology", keywords: ["definition", "term", "concept"] },
+  ],
+  medical: [
+    { title: "Clinical Context", keywords: ["clinical", "history", "context"] },
+    { title: "Symptoms / Conditions", keywords: ["symptom", "condition"] },
+    { title: "Diagnostic Findings", keywords: ["diagnosis", "diagnostic"] },
+    {
+      title: "Treatment / Recommendations",
+      keywords: ["treatment", "therapy", "recommendation", "plan"],
+    },
+    { title: "Medications", keywords: ["medication", "drug", "dosage"] },
+    { title: "Key Terms", keywords: ["term", "definition"] },
+  ],
+  legal: [
+    { title: "Case Name", keywords: ["v.", "vs.", "case"] },
+    { title: "Facts", keywords: ["fact", "background"] },
+    { title: "Legal Issues", keywords: ["issue", "question"] },
+    {
+      title: "Applicable Laws",
+      keywords: ["statute", "act", "section", "regulation", "article"],
+    },
+    { title: "Arguments", keywords: ["argument", "claim", "submission"] },
+    { title: "Decision", keywords: ["held", "decision", "judgment", "ruled"] },
+    {
+      title: "Reasoning",
+      keywords: ["reason", "analysis", "considered"],
+    },
+    { title: "Precedents", keywords: ["precedent", "authority", "case"] },
+  ],
+  business: [
+    { title: "Report Focus", keywords: ["report", "summary", "overview"] },
+    { title: "Key Insights", keywords: ["insight", "highlight", "key"] },
+    { title: "Market Trends", keywords: ["market", "trend", "demand"] },
+    { title: "Financial Highlights", keywords: ["revenue", "profit", "kpi"] },
+    { title: "Risks", keywords: ["risk", "challenge", "threat"] },
+    {
+      title: "Recommendations",
+      keywords: ["recommend", "strategy", "opportunity"],
+    },
+    { title: "Action Points", keywords: ["action", "next steps", "plan"] },
+  ],
+  engineering: [
+    { title: "System / Technology", keywords: ["system", "technology"] },
+    { title: "Core Concepts", keywords: ["concept", "principle"] },
+    { title: "Architecture Overview", keywords: ["architecture", "design"] },
+    {
+      title: "Implementation Notes",
+      keywords: ["implementation", "algorithm", "approach"],
+    },
+    { title: "Key Components", keywords: ["component", "module", "service"] },
+    { title: "Advantages / Limitations", keywords: ["advantage", "limitation"] },
+  ],
+  finance: [
+    { title: "Report Focus", keywords: ["report", "overview"] },
+    { title: "Key Metrics", keywords: ["metric", "ratio", "margin"] },
+    { title: "Trends", keywords: ["trend", "growth", "decline"] },
+    { title: "Risks", keywords: ["risk", "volatility"] },
+    { title: "Forecasts", keywords: ["forecast", "projection", "outlook"] },
+    { title: "Investment Insights", keywords: ["investment", "portfolio"] },
+  ],
+  education: [
+    { title: "Key Concepts", keywords: ["concept", "idea", "theme"] },
+    { title: "Definitions", keywords: ["definition", "term"] },
+    { title: "Principles / Formulas", keywords: ["principle", "formula"] },
+    { title: "Exam Takeaways", keywords: ["exam", "question", "remember"] },
+  ],
+  media: [
+    { title: "Key Facts", keywords: ["fact", "reported", "confirmed"] },
+    { title: "Timeline", keywords: ["timeline", "when", "date"] },
+    { title: "Quotes", keywords: ["quote", "\"", "said"] },
+    { title: "Stakeholders", keywords: ["stakeholder", "source", "official"] },
+    { title: "Implications", keywords: ["impact", "implication", "effect"] },
+  ],
+};
 
 const normalizeWhitespace = (value: string) =>
   value.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
@@ -267,6 +487,99 @@ const annotateBullet = (value: string) => {
     return `DIAGRAM: ${value}`;
   }
   return value;
+};
+
+const DOMAIN_TITLES: Record<Exclude<DomainKey, "smart">, string> = {
+  general: "General Notes",
+  academic: "Academic Notes",
+  medical: "Medical Notes",
+  legal: "Legal Notes",
+  business: "Business Notes",
+  engineering: "Engineering Notes",
+  finance: "Finance Notes",
+  education: "Education Notes",
+  media: "Media Notes",
+};
+
+const countKeywordHits = (text: string, keywords: string[]) => {
+  const normalized = text.toLowerCase();
+  return keywords.reduce((count, keyword) => {
+    if (normalized.includes(keyword)) {
+      return count + 1;
+    }
+    return count;
+  }, 0);
+};
+
+const detectDomain = (text: string): Exclude<DomainKey, "smart"> => {
+  const candidates = Object.entries(DOMAIN_KEYWORDS).filter(
+    ([key]) => key !== "general",
+  ) as Array<[Exclude<DomainKey, "general" | "smart">, string[]]>;
+  let best: Exclude<DomainKey, "smart"> = "general";
+  let bestScore = 0;
+  for (const [domain, keywords] of candidates) {
+    const score = countKeywordHits(text, keywords);
+    if (score > bestScore) {
+      bestScore = score;
+      best = domain;
+    }
+  }
+  if (bestScore === 0) {
+    return "general";
+  }
+  return best;
+};
+
+const shouldSkipSentence = (sentence: string) => {
+  if (
+    isExampleSentence(sentence) &&
+    !isCaseReference(sentence) &&
+    !isLegislationReference(sentence) &&
+    !isDiagramReference(sentence)
+  ) {
+    return true;
+  }
+  return false;
+};
+
+const buildDomainBlock = (
+  domain: Exclude<DomainKey, "general" | "smart">,
+  subtype: string,
+  text: string,
+) => {
+  const sections = DOMAIN_SECTIONS[domain];
+  if (!sections?.length) return "";
+  const heading = subtype
+    ? `${DOMAIN_TITLES[domain]} — ${subtype}`
+    : DOMAIN_TITLES[domain];
+  const sentences = splitSentences(text)
+    .map((sentence) => normalizeWhitespace(sentence))
+    .filter(Boolean)
+    .filter((sentence) => !shouldSkipSentence(sentence));
+
+  const lines: string[] = [heading];
+
+  sections.forEach((section) => {
+    const bullets: string[] = [];
+    const seen = new Set<string>();
+    const keywords = section.keywords.map((keyword) => keyword.toLowerCase());
+    sentences.forEach((sentence) => {
+      const lower = sentence.toLowerCase();
+      if (!keywords.some((keyword) => lower.includes(keyword))) return;
+      const normalized = lower.trim();
+      if (seen.has(normalized)) return;
+      seen.add(normalized);
+      bullets.push(annotateBullet(sentence));
+    });
+    if (bullets.length) {
+      lines.push(section.title);
+      bullets.slice(0, 6).forEach((bullet) => {
+        lines.push(`- ${bullet}`);
+      });
+    }
+  });
+
+  return lines.length > 1 ? lines.join("\n") : "";
 };
 
 const detectHeading = (
@@ -554,6 +867,9 @@ const buildNotes = (text: string): NotesResponse => {
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
   let text = "";
+  let mode: DomainKey = "general";
+  let subtype = "";
+  let subtypeLabel = "";
   const files: File[] = [];
 
   if (contentType.includes("multipart/form-data")) {
@@ -562,6 +878,18 @@ export async function POST(request: Request) {
     if (typeof textValue === "string") {
       text = textValue;
     }
+    const modeValue = form.get("mode");
+    if (typeof modeValue === "string") {
+      mode = normalizeMode(modeValue);
+    }
+    const subtypeValue = form.get("subtype");
+    if (typeof subtypeValue === "string") {
+      subtype = subtypeValue;
+    }
+    const subtypeLabelValue = form.get("subtypeLabel");
+    if (typeof subtypeLabelValue === "string") {
+      subtypeLabel = subtypeLabelValue;
+    }
     form.getAll("files").forEach((entry) => {
       if (entry instanceof File) {
         files.push(entry);
@@ -569,8 +897,16 @@ export async function POST(request: Request) {
     });
   } else {
     try {
-      const payload = (await request.json()) as { text?: string };
+      const payload = (await request.json()) as {
+        text?: string;
+        mode?: DomainKey;
+        subtype?: string;
+        subtypeLabel?: string;
+      };
       text = payload.text ?? "";
+      mode = normalizeMode(payload.mode);
+      subtype = payload.subtype ?? "";
+      subtypeLabel = payload.subtypeLabel ?? "";
     } catch {
       return NextResponse.json(
         { error: "Invalid JSON payload." },
@@ -656,6 +992,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const notes = buildNotes(combined);
-  return NextResponse.json(notes);
+  const baseNotes = buildNotes(combined).notes;
+  let field: Exclude<DomainKey, "smart"> | undefined;
+  let domainForBlock: Exclude<DomainKey, "general" | "smart"> | null = null;
+
+  if (mode === "smart") {
+    const detected = detectDomain(combined);
+    field = detected;
+    if (detected !== "general") {
+      domainForBlock = detected;
+    }
+  } else if (mode !== "general") {
+    domainForBlock = mode as Exclude<DomainKey, "general" | "smart">;
+  }
+
+  const blockSubtype = subtypeLabel || subtype;
+  const domainBlock = domainForBlock
+    ? buildDomainBlock(domainForBlock, blockSubtype, combined)
+    : "";
+  const notes = domainBlock ? `${domainBlock}\n\n${baseNotes}` : baseNotes;
+
+  return NextResponse.json({ notes, field });
 }

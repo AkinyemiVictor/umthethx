@@ -1,17 +1,26 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type DragEvent,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import { FileChip } from "@repo/ui/file-chip";
+import {
+  noteMakerModeOptions,
+  noteMakerSubtypeOptions,
+  normalizeMode,
+  type NoteMakerMode,
+} from "../lib/ai-notemaker-types";
 import { useTranslations } from "./language-provider";
 
 type NotesResponse = {
   notes: string;
+  field?: string;
 };
 
 type UploadItem = {
@@ -22,6 +31,9 @@ type UploadItem = {
 
 const countWords = (value: string) =>
   value.trim().split(/\s+/).filter(Boolean).length;
+
+const getExtension = (fileName: string) =>
+  fileName.split(".").pop()?.toLowerCase() ?? "";
 
 const buildUploadId = (file: File) =>
   `${file.name}-${file.size}-${file.lastModified}`;
@@ -38,14 +50,22 @@ const formatBytes = (size: number) => {
 
 export function AiNoteMakerWorkspace() {
   const t = useTranslations();
+  const searchParams = useSearchParams();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [text, setText] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [mode, setMode] = useState<NoteMakerMode>("general");
+  const [subtype, setSubtype] = useState("");
+  const [detectedField, setDetectedField] = useState<string | null>(null);
+  const [downloadFormat, setDownloadFormat] = useState<
+    "txt" | "pdf" | "docx"
+  >("txt");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const hasNotes = Boolean(notes.trim().length);
 
@@ -55,7 +75,49 @@ export function AiNoteMakerWorkspace() {
     setNotes("");
     setError(null);
     setIsCopied(false);
+    setDownloadFormat("txt");
+    setDetectedField(null);
   };
+
+  const modeLabels = useMemo(
+    () =>
+      new Map(
+        noteMakerModeOptions.map((option) => [
+          option.value,
+          t(option.labelKey),
+        ]),
+      ),
+    [t],
+  );
+
+  const getSubtypeLabel = (modeValue: NoteMakerMode, subtypeValue: string) => {
+    if (!subtypeValue || modeValue === "general" || modeValue === "smart") {
+      return "";
+    }
+    const options = noteMakerSubtypeOptions[modeValue] ?? [];
+    const match = options.find((option) => option.value === subtypeValue);
+    return match ? t(match.labelKey) : "";
+  };
+
+  const modeLabel = modeLabels.get(mode) ?? mode;
+  const subtypeLabel = getSubtypeLabel(mode, subtype);
+  const detectedLabel = detectedField
+    ? modeLabels.get(detectedField as NoteMakerMode) ?? detectedField
+    : null;
+
+  useEffect(() => {
+    const nextMode = normalizeMode(searchParams?.get("mode"));
+    const rawSubtype = searchParams?.get("subtype") ?? "";
+    let nextSubtype = "";
+    if (nextMode !== "general" && nextMode !== "smart") {
+      const options = noteMakerSubtypeOptions[nextMode] ?? [];
+      if (options.some((option) => option.value === rawSubtype)) {
+        nextSubtype = rawSubtype;
+      }
+    }
+    setMode(nextMode);
+    setSubtype(nextSubtype);
+  }, [searchParams]);
 
   const handleFiles = (selected: File[]) => {
     if (!selected.length) return;
@@ -125,9 +187,27 @@ export function AiNoteMakerWorkspace() {
     setIsCopied(false);
 
     try {
+      const nextFormat = (() => {
+        if (!uploads.length) return "txt" as const;
+        const exts = Array.from(
+          new Set(uploads.map((item) => getExtension(item.file.name))),
+        ).filter(Boolean);
+        if (exts.length === 1 && (exts[0] === "pdf" || exts[0] === "docx")) {
+          return exts[0] as "pdf" | "docx";
+        }
+        return "txt" as const;
+      })();
+
       const formData = new FormData();
       if (trimmed) {
         formData.append("text", trimmed);
+      }
+      formData.append("mode", mode);
+      if (subtype) {
+        formData.append("subtype", subtype);
+        if (subtypeLabel) {
+          formData.append("subtypeLabel", subtypeLabel);
+        }
       }
       uploads.forEach((item) => {
         formData.append("files", item.file);
@@ -142,6 +222,8 @@ export function AiNoteMakerWorkspace() {
       }
       const payload = (await response.json()) as NotesResponse;
       setNotes(payload.notes ?? "");
+      setDownloadFormat(nextFormat);
+      setDetectedField(payload.field ?? null);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t("aiNoteMaker.errorRequestFailed");
@@ -164,15 +246,101 @@ export function AiNoteMakerWorkspace() {
 
   const handleDownload = () => {
     if (!notes.trim()) return;
-    const blob = new Blob([notes], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "notes.txt";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    const baseName = "notes";
+    const filename = `${baseName}.${downloadFormat}`;
+    const downloadBlob = (blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    };
+
+    if (downloadFormat === "txt") {
+      downloadBlob(new Blob([notes], { type: "text/plain;charset=utf-8" }));
+      return;
+    }
+
+    setIsDownloading(true);
+
+    if (downloadFormat === "docx") {
+      import("docx")
+        .then(async ({ Document, Packer, Paragraph }) => {
+          const lines = notes.split("\n").map((line) => line.trimEnd());
+          const doc = new Document({
+            sections: [
+              {
+                children: lines.map((line) => new Paragraph(line || " ")),
+              },
+            ],
+          });
+          const blob = await Packer.toBlob(doc);
+          downloadBlob(blob);
+        })
+        .catch(() => {
+          setError(t("aiNoteMaker.errorRequestFailed"));
+        })
+        .finally(() => setIsDownloading(false));
+      return;
+    }
+
+    import("pdf-lib")
+      .then(async ({ PDFDocument, StandardFonts }) => {
+        const pdfDoc = await PDFDocument.create();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const fontSize = 11;
+        const lineHeight = 14;
+        const margin = 50;
+        const maxWidth = 495;
+        let page = pdfDoc.addPage();
+        let { height } = page.getSize();
+        let cursorY = height - margin;
+
+        const writeLine = (line: string) => {
+          if (cursorY < margin) {
+            page = pdfDoc.addPage();
+            height = page.getSize().height;
+            cursorY = height - margin;
+          }
+          page.drawText(line, { x: margin, y: cursorY, size: fontSize, font });
+          cursorY -= lineHeight;
+        };
+
+        const wrapLine = (line: string) => {
+          if (!line) {
+            writeLine(" ");
+            return;
+          }
+          const words = line.split(/\s+/);
+          let buffer = "";
+          words.forEach((word) => {
+            const next = buffer ? `${buffer} ${word}` : word;
+            const width = font.widthOfTextAtSize(next, fontSize);
+            if (width > maxWidth && buffer) {
+              writeLine(buffer);
+              buffer = word;
+            } else {
+              buffer = next;
+            }
+          });
+          if (buffer) {
+            writeLine(buffer);
+          }
+        };
+
+        notes.split("\n").forEach((line) => wrapLine(line));
+        const pdfBytes = await pdfDoc.save();
+        downloadBlob(
+          new Blob([pdfBytes], { type: "application/pdf" }),
+        );
+      })
+      .catch(() => {
+        setError(t("aiNoteMaker.errorRequestFailed"));
+      })
+      .finally(() => setIsDownloading(false));
   };
 
   return (
@@ -182,6 +350,12 @@ export function AiNoteMakerWorkspace() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
               {t("aiNoteMaker.previewTitle")}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-[var(--muted-2)]">
+              {mode !== "general" ? <span>{modeLabel}</span> : null}
+              {detectedLabel ? (
+                <span>{t("aiNoteMaker.detectedField", { field: detectedLabel })}</span>
+              ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -215,9 +389,12 @@ export function AiNoteMakerWorkspace() {
               <button
                 type="button"
                 onClick={handleDownload}
+                disabled={isDownloading}
                 className="inline-flex items-center justify-center rounded-full bg-[var(--brand-500)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)]"
               >
-                {t("aiNoteMaker.downloadNotes")}
+                {isDownloading
+                  ? t("workflow.processing")
+                  : t("aiNoteMaker.downloadNotes")}
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { MobileRectangleAds } from "../components/mobile-rectangle-ads";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { AiNoteMakerWorkspace } from "../components/ai-note-maker";
+import { AiNoteMakerTypeGrid } from "../components/ai-note-maker-type-grid";
 import { converters, footerConverters } from "../lib/converters";
 import { getCurrentLanguage } from "../lib/i18n";
 import { getTranslator } from "../lib/translations";
@@ -77,6 +78,8 @@ export default async function AiNoteMakerPage() {
             ))}
           </div>
         </section>
+
+        <AiNoteMakerTypeGrid />
 
         <AdSlot label={t("ads.label")} text={t("ads.text")} />
 
