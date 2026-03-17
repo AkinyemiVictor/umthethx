@@ -32,10 +32,13 @@ const ensureProductionBuild = async () => {
   if (existsSync(buildIdPath)) {
     return;
   }
-  console.warn(
-    `Missing production build at ${buildIdPath}. Running "next build" before start...`,
+  throw new Error(
+    [
+      `Missing production build at ${buildIdPath}.`,
+      "This service must be built during the Railway build phase, not during start.",
+      "Check that the web service uses apps/web/railway.json and that its build command completes successfully.",
+    ].join(" "),
   );
-  await runNext(["build", "--webpack"]);
 };
 
 const start = async () => {

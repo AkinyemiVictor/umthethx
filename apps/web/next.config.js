@@ -10,10 +10,12 @@ dotenv.config({ path: path.join(repoRoot, ".env"), override: true });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: repoRoot,
   experimental: {
     // Railway containers can report high CPU counts, which causes excessive
     // build workers and OOM during page data collection.
     cpus: 1,
+    webpackMemoryOptimizations: true,
   },
 };
 
