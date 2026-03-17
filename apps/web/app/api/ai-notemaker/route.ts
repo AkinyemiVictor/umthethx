@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { PDFParse } from "pdf-parse";
 import JSZip from "jszip";
+import { createRequire } from "module";
+import { pathToFileURL } from "url";
+
+const require = createRequire(import.meta.url);
+const pdfWorkerPath = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+PDFParse.setWorker(pathToFileURL(pdfWorkerPath).toString());
 
 type DomainKey =
   | "general"
@@ -38,6 +44,9 @@ type NotesResponse = {
   notes: string;
   field?: DomainKey;
 };
+
+const OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
+const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 
 const MIN_WORDS = 30;
 const REDUCTION_RATIO = 0.5;
@@ -1010,7 +1019,7 @@ const decodeXmlEntities = (value: string) =>
 
 const extractTextFromPdf = async (file: File) => {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const parser = new PDFParse({ data: buffer, disableWorker: true });
+  const parser = new PDFParse({ data: buffer });
   try {
     const parsed = await parser.getText();
     return parsed.text?.trim() ?? "";
@@ -1614,6 +1623,156 @@ const buildNotes = (text: string): NotesResponse => {
   return { notes };
 };
 
+type OpenAiConfig = {
+  apiKey: string;
+  model: string;
+};
+
+type LlmRequest = {
+  text: string;
+  domainForBlock: Exclude<DomainKey, "general" | "smart"> | null;
+  subtype: string;
+  subtypeLabel: string;
+  specsLabel: string;
+  missingLabel: string;
+};
+
+const getOpenAiConfig = (): OpenAiConfig | null => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || !apiKey.trim()) return null;
+  const model = process.env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL;
+  return { apiKey: apiKey.trim(), model };
+};
+
+const extractOpenAiOutputText = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") return "";
+  const direct = (payload as { output_text?: unknown }).output_text;
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim();
+  }
+  const output = (payload as { output?: unknown }).output;
+  if (!Array.isArray(output)) return "";
+  const parts: string[] = [];
+  output.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    const content = (item as { content?: unknown }).content;
+    if (!Array.isArray(content)) return;
+    content.forEach((entry) => {
+      if (!entry || typeof entry !== "object") return;
+      const textValue = (entry as { text?: unknown }).text;
+      if (typeof textValue === "string") {
+        parts.push(textValue);
+      }
+    });
+  });
+  return parts.join("").trim();
+};
+
+const buildDomainSpecsList = (
+  domain: Exclude<DomainKey, "general" | "smart">,
+  subtypeValue: string,
+) => {
+  const subtypeKey = subtypeValue.toLowerCase();
+  const subtypeSpecs = subtypeKey ? SUBTYPE_SPECS[domain]?.[subtypeKey] : null;
+  return subtypeSpecs && subtypeSpecs.length
+    ? subtypeSpecs
+    : DOMAIN_SPECS[domain] || [];
+};
+
+const buildLlmInstructions = ({
+  domainForBlock,
+  subtype,
+  subtypeLabel,
+  specsLabel,
+  missingLabel,
+}: Omit<LlmRequest, "text">) => {
+  const lines: string[] = [
+    "You are an AI notemaker that rewrites source text into clean study notes.",
+    "Rules:",
+    "- Preserve document heading order (chapters, parts, sections) when present.",
+    "- Convert paragraphs into concise bullet points.",
+    "- Keep page markers (for example: Page 3) as bullets.",
+    "- Keep diagram references (figure, table, chart) and prefix them with DIAGRAM:.",
+    "- Remove activities, exercises, and examples unless they contain a case, law, or diagram reference.",
+    "- Shorten the text to roughly 50% while keeping key facts.",
+    "- For legal content, prefix case citations with CASE: and laws with LEGISLATION:.",
+    "- Output plain text only; no code blocks.",
+  ];
+
+  if (domainForBlock) {
+    const heading = subtypeLabel
+      ? `${DOMAIN_TITLES[domainForBlock]} - ${subtypeLabel}`
+      : DOMAIN_TITLES[domainForBlock];
+    const specs = buildDomainSpecsList(domainForBlock, subtype);
+    const sections = getSectionDefinitions(domainForBlock, subtype);
+
+    lines.push("");
+    lines.push("Add a domain summary block at the top using this structure:");
+    lines.push(`Heading: ${heading}`);
+    if (specs.length) {
+      lines.push(`${specsLabel} bullets:`);
+      specs.forEach((item) => {
+        lines.push(`- ${item}`);
+      });
+    }
+    if (sections.length) {
+      lines.push("Sections to include:");
+      sections.forEach((section) => {
+        const required = section.required ? " (required)" : "";
+        lines.push(`- ${section.title}${required}`);
+      });
+      lines.push(
+        `If a required section has no content, include a single bullet: ${missingLabel}`,
+      );
+    }
+    lines.push("Then add the rest of the notes after a blank line.");
+  }
+
+  return lines.join("\n");
+};
+
+const buildLlmInput = (text: string) => `Document text:\n${text}`;
+
+const generateNotesWithLlm = async (request: LlmRequest) => {
+  const config = getOpenAiConfig();
+  if (!config) return null;
+  const instructions = buildLlmInstructions({
+    domainForBlock: request.domainForBlock,
+    subtype: request.subtype,
+    subtypeLabel: request.subtypeLabel,
+    specsLabel: request.specsLabel,
+    missingLabel: request.missingLabel,
+  });
+  const input = buildLlmInput(request.text);
+
+  const response = await fetch(OPENAI_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      input,
+      instructions,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `OpenAI request failed (${response.status}). ${detail.slice(0, 200)}`,
+    );
+  }
+
+  const payload = (await response.json()) as unknown;
+  const outputText = extractOpenAiOutputText(payload);
+  if (!outputText) {
+    throw new Error("OpenAI response did not include text output.");
+  }
+  return outputText;
+};
+
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
   let text = "";
@@ -1760,7 +1919,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const baseNotes = buildNotes(combined).notes;
   let field: Exclude<DomainKey, "smart"> | undefined;
   let domainForBlock: Exclude<DomainKey, "general" | "smart"> | null = null;
 
@@ -1775,6 +1933,25 @@ export async function POST(request: Request) {
   }
 
   const blockSubtypeLabel = subtypeLabel || subtype;
+  let llmNotes: string | null = null;
+  try {
+    llmNotes = await generateNotesWithLlm({
+      text: combined,
+      domainForBlock,
+      subtype,
+      subtypeLabel: blockSubtypeLabel,
+      specsLabel,
+      missingLabel,
+    });
+  } catch (error) {
+    console.error("OpenAI summarization failed:", error);
+  }
+
+  if (llmNotes) {
+    return NextResponse.json({ notes: llmNotes, field });
+  }
+
+  const baseNotes = buildNotes(combined).notes;
   const domainBlock = domainForBlock
     ? buildDomainBlock(
         domainForBlock,
