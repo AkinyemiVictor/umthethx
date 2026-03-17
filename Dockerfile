@@ -11,6 +11,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps ./apps
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS=--max_old_space_size=1536
+RUN pnpm --filter web build
 
 FROM node:20-bookworm-slim AS runtime
 RUN corepack enable
