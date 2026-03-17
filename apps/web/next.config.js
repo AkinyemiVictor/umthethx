@@ -13,7 +13,7 @@ const nextConfig = {
   experimental: {
     // Railway containers can report high CPU counts, which causes excessive
     // build workers and OOM during page data collection.
-    cpus: 2,
+    cpus: 1,
   },
 };
 
