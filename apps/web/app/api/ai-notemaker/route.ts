@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
 import { PDFParse } from "pdf-parse";
 import JSZip from "jszip";
-import { createRequire } from "module";
-import { pathToFileURL } from "url";
+import path from "path";
 
-const require = createRequire(import.meta.url);
-const pdfWorkerPath = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
-PDFParse.setWorker(pathToFileURL(pdfWorkerPath).toString());
+let pdfWorkerConfigured = false;
+
+const ensurePdfWorker = () => {
+  if (pdfWorkerConfigured) {
+    return;
+  }
+  const pdfWorkerPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "pdfjs-dist",
+    "legacy",
+    "build",
+    "pdf.worker.mjs",
+  );
+  PDFParse.setWorker(pdfWorkerPath);
+  pdfWorkerConfigured = true;
+};
 
 type DomainKey =
   | "general"
@@ -1018,6 +1031,7 @@ const decodeXmlEntities = (value: string) =>
     .replace(/&apos;/g, "'");
 
 const extractTextFromPdf = async (file: File) => {
+  ensurePdfWorker();
   const buffer = Buffer.from(await file.arrayBuffer());
   const parser = new PDFParse({ data: buffer });
   try {
