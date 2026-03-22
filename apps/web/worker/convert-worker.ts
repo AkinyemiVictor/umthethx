@@ -31,8 +31,8 @@ const __dirname = path.dirname(__filename);
 const scriptsDir = path.join(__dirname, "scripts");
 const repoRoot = path.resolve(__dirname, "../../..");
 
+dotenv.config({ path: path.join(repoRoot, ".env"), override: false });
 dotenv.config({ path: path.join(repoRoot, ".env.local"), override: true });
-dotenv.config({ path: path.join(repoRoot, ".env"), override: true });
 
 const s3 = getS3Client();
 const bucket = getS3Bucket();

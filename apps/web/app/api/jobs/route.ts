@@ -3,6 +3,7 @@ import { converters, getConverterBySlug } from "../../../src/lib/converters";
 import {
   createJobRecord,
   getJobRecord,
+  updateJobRecord,
   type JobInput,
 } from "../../../src/lib/job-store";
 import { getQueue } from "../../../src/lib/queue";
@@ -189,20 +190,31 @@ export async function POST(request: Request) {
     outputs: [],
   });
 
+  let queue: ReturnType<typeof getQueue> | null = null;
   try {
-    const queue = getQueue();
+    queue = getQueue();
     await queue.add(
       "convert",
       {
         jobId,
       },
-      { jobId, removeOnComplete: 1000, removeOnFail: 1000 },
+      {
+        jobId,
+        removeOnComplete: 1000,
+        removeOnFail: 1000,
+      },
     );
-    await queue.close();
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to enqueue job.";
+    try {
+      await updateJobRecord(jobId, { status: "failed", error: message });
+    } catch {
+      // Best effort only. The primary error is the failed enqueue attempt.
+    }
     return NextResponse.json({ error: message }, { status: 500 });
+  } finally {
+    await queue?.close().catch(() => undefined);
   }
 
   return NextResponse.json({ jobId });

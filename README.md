@@ -10,6 +10,16 @@ Simple upload -> convert -> download tool. No accounts or history.
 4. Start web (PowerShell): `$env:NEXT_DISABLE_TURBOPACK="1"; pnpm --filter web dev`
 5. Start worker in another terminal: `pnpm --filter web run worker:convert`
 
+## Redis config
+
+BullMQ needs a TCP Redis connection.
+
+- Local Redis: set `REDIS_URL=redis://localhost:6379`
+- Managed Redis: set `REDIS_URL`, or set `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD`
+- Upstash: use the database host/password values, not only the REST API values
+- TLS is enabled automatically for `*.upstash.io`; set `REDIS_TLS=true` if you need TLS for another host
+- `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are supported as a fallback when the TCP host/password vars are not set
+
 ## Online deployment (Railway)
 
 This repo includes Railway config-as-code files:
@@ -19,20 +29,24 @@ This repo includes Railway config-as-code files:
 
 1. Push this repo to GitHub.
 2. Create a new Railway project from that repo.
-3. Add a Redis service in the same project.
+3. Provision a Redis instance reachable by both services, either in Railway or externally with Upstash.
 4. Create the web service from the repo and set:
    - Root Directory: `/`
    - Config as Code path: `apps/web/railway.json`
 5. Create the worker service from the repo and set:
    - Root Directory: `/`
    - Config as Code path: `workers/convert/railway.json`
-6. Set `REDIS_URL` on both services to `${{Redis.REDIS_URL}}`.
+6. Set Redis envs on both services:
+   - Railway Redis: `REDIS_URL=${{Redis.REDIS_URL}}`
+   - Upstash: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
 7. Set required app secrets:
    - Web: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_USER_ID`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
    - Worker: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 8. Deploy both services, then:
    - Check web health at `/api/health`
    - Confirm worker logs show it is consuming `converter-jobs`
+
+If you move the worker to Fly.io, reuse the same Redis envs there so the web app and worker are attached to the same BullMQ queue.
 
 ## Worker container
 

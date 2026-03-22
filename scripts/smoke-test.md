@@ -1,7 +1,7 @@
 # Smoke Test (manual)
 
 Prereqs:
-- Redis running and `REDIS_URL` set (local or remote).
+- Redis running and configured with either `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`.
 - AWS credentials + S3 bucket set in `.env` or `.env.local`.
 - `pnpm install` completed.
 

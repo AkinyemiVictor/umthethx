@@ -7,7 +7,14 @@ export type EnvKey =
   | "AWS_ACCESS_KEY_ID"
   | "AWS_SECRET_ACCESS_KEY"
   | "S3_BUCKET"
-  | "REDIS_URL";
+  | "REDIS_URL"
+  | "REDIS_HOST"
+  | "REDIS_PORT"
+  | "REDIS_PASSWORD"
+  | "REDIS_USERNAME"
+  | "REDIS_TLS"
+  | "UPSTASH_REDIS_REST_URL"
+  | "UPSTASH_REDIS_REST_TOKEN";
 
 const readEnv = (key: EnvKey) => process.env[key]?.trim();
 
