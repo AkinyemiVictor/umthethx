@@ -4,7 +4,9 @@
 # fly deploy -c workers/convert/fly.toml .
 
 app = "umthethx-worker"
-primary_region = "iad"
+# Keep the worker close to AWS S3/Textract. For eu-north-1, Fly `arn` is the best fit.
+# If your production AWS region changes, update this too.
+primary_region = "arn"
 kill_signal = "SIGTERM"
 kill_timeout = 300
 

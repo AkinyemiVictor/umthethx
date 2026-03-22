@@ -38,10 +38,11 @@ This repo includes Railway config-as-code files:
    - Config as Code path: `workers/convert/railway.json`
 6. Set Redis envs on both services:
    - Railway Redis: `REDIS_URL=${{Redis.REDIS_URL}}`
-   - Upstash: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
+   - Upstash: `REDIS_URL` or `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
 7. Set required app secrets:
-   - Web: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_USER_ID`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-   - Worker: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+   - Web: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, plus Redis envs
+   - Worker: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, plus Redis envs
+   - Feature-specific extras: `OPENAI_API_KEY` for AI NoteMaker, `LIBRETRANSLATE_*` if image translation should call a remote LibreTranslate service
 8. Deploy both services, then:
    - Check web health at `/api/health`
    - Confirm worker logs show it is consuming `converter-jobs`
@@ -56,9 +57,11 @@ This repo now includes a dedicated Fly worker config at `workers/convert/fly.tom
 2. Create the Fly app without deploying yet:
    - `fly launch --no-deploy --copy-config -c workers/convert/fly.toml`
 3. Edit `app = "umthethx-worker"` in `workers/convert/fly.toml` if you want a different app name.
-4. Set worker secrets on Fly:
-   - `fly secrets set REDIS_URL=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... AWS_REGION=... S3_BUCKET=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... -c workers/convert/fly.toml`
-5. Deploy the worker from the repo root:
+4. Keep `primary_region` close to your AWS region, not necessarily your Redis region.
+   - For `AWS_REGION=eu-north-1`, this repo uses `primary_region = "arn"` (Stockholm).
+5. Set worker secrets on Fly:
+   - `fly secrets set REDIS_URL=... AWS_REGION=... S3_BUCKET=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... -c workers/convert/fly.toml`
+6. Deploy the worker from the repo root:
    - `fly deploy -c workers/convert/fly.toml .`
 
 Notes:
@@ -66,6 +69,85 @@ Notes:
 - The worker command is the same conversion worker already used locally and on Railway.
 - Worker concurrency is pinned to `1` in code to avoid overlapping heavy conversions on a small Fly Machine.
 - Sensitive values should go into Fly secrets, not the `fly.toml` file.
+
+## Railway + Upstash + Fly checklist
+
+Use this order if the app is being split across Railway web, Upstash Redis, and Fly worker.
+
+1. Upstash Redis
+   - Create the Redis database.
+   - Copy the TCP connection string, preferably `REDIS_URL=rediss://...`.
+   - Put the same Redis env on both Railway web and the Fly worker.
+
+2. AWS S3 bucket
+   - Make sure `S3_BUCKET` exists in the same `AWS_REGION` you configure in the app.
+   - The IAM credentials used by the app need at least `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, and `s3:ListBucket`.
+   - For OCR and PDF text extraction, those AWS credentials also need Textract permissions.
+
+3. S3 bucket CORS
+   - This app uploads directly from the browser to S3 using a signed `PUT` URL.
+   - If CORS is missing or the allowed origin is wrong, the UI will appear stuck at `Uploading...` before Redis or Fly is involved.
+   - Add bucket CORS for your production and local origins. Example:
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedOrigins": [
+      "https://www.umthethx.online",
+      "https://umthethx.online",
+      "http://localhost:3000"
+    ],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+4. Railway web envs
+   - Required for the converter flow: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `REDIS_URL`
+   - Optional or feature-specific: `OPENAI_API_KEY`, `OPENAI_MODEL`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, analytics envs
+
+5. Fly worker envs
+   - Required: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `REDIS_URL`
+   - Optional or feature-specific: `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, `MAX_DOCUMENT_PAGES`
+
+6. Deploy order
+   - Deploy Railway web first and confirm `https://www.umthethx.online/api/health` returns `ok`
+   - Log in to Fly, create the Fly app, set Fly secrets, then deploy the Fly worker
+   - Then test one small upload
+
+7. What to test in the browser
+   - `POST /api/uploads/sign` should return `200`
+   - The signed S3 `PUT` request should return `200`
+   - `POST /api/jobs` should return `200`
+   - After that, `/api/jobs/{jobId}` should move from `queued` to `processing` to `completed`
+
+## If upload is stuck at `Uploading...`
+
+That symptom is almost always before BullMQ and before the Fly worker.
+
+- The client first calls `/api/uploads/sign`
+- Then the browser uploads the file directly to S3 with a signed `PUT`
+- Only after that succeeds does the app call `/api/jobs` and enqueue BullMQ work
+
+So if the UI hangs at `Uploading...`, check these first:
+
+1. Railway web has valid `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+2. The bucket region matches `AWS_REGION`
+3. The bucket CORS includes `https://www.umthethx.online`
+4. The signed `PUT` request is not getting a `403`, `307`, or CORS failure in the browser Network tab
+5. The IAM user behind the AWS credentials can `PutObject` into the bucket
+
+## What is still manual
+
+The repo changes alone are not enough to create a worker in Fly.io.
+
+- If you have not run `fly auth login`, you are not authenticated with Fly yet.
+- If you have not run `fly launch --no-deploy --copy-config -c workers/convert/fly.toml`, the Fly app does not exist yet.
+- If you have not run `fly secrets set ...`, the worker has no runtime credentials.
+- If you have not run `fly deploy -c workers/convert/fly.toml .`, there is still no worker Machine processing BullMQ jobs.
 
 ## Worker container
 

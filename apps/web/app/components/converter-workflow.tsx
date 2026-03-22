@@ -94,6 +94,32 @@ const getMimeFromFilename = (fileName: string) => {
 const buildUploadId = (file: File) =>
   `${file.name}-${file.size}-${file.lastModified}`;
 const MAX_UPLOADS = 5;
+const SIGN_REQUEST_TIMEOUT_MS = 15_000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 60_000;
+const ENQUEUE_REQUEST_TIMEOUT_MS = 15_000;
+
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+) => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(timeoutMessage);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
 
 export function ConverterWorkflow({
   converter,
@@ -221,16 +247,21 @@ export function ConverterWorkflow({
         const file = item.file;
         const contentType =
           file.type || getMimeFromFilename(file.name) || "application/octet-stream";
-        const presignRes = await fetch("/api/uploads/sign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: file.name,
-            contentType,
-            sizeBytes: file.size,
-            jobId: activeJobId,
-          }),
-        });
+        const presignRes = await fetchWithTimeout(
+          "/api/uploads/sign",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType,
+              sizeBytes: file.size,
+              jobId: activeJobId,
+            }),
+          },
+          SIGN_REQUEST_TIMEOUT_MS,
+          t("workflow.uploadUrlError"),
+        );
 
         if (!presignRes.ok) {
           const payload = await presignRes.json().catch(() => ({}));
@@ -245,11 +276,16 @@ export function ConverterWorkflow({
         };
         activeJobId = presign.jobId;
 
-        const uploadRes = await fetch(presign.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": contentType },
-          body: file,
-        });
+        const uploadRes = await fetchWithTimeout(
+          presign.uploadUrl,
+          {
+            method: "PUT",
+            headers: { "Content-Type": contentType },
+            body: file,
+          },
+          UPLOAD_REQUEST_TIMEOUT_MS,
+          t("workflow.uploadFailed"),
+        );
 
         if (!uploadRes.ok) {
           throw new Error(t("workflow.uploadFailed"));
@@ -267,15 +303,20 @@ export function ConverterWorkflow({
         throw new Error(t("workflow.uploadUrlError"));
       }
 
-      const enqueueRes = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          converterSlug: converter.slug,
-          jobId: activeJobId,
-          inputs: collectedInputs,
-        }),
-      });
+      const enqueueRes = await fetchWithTimeout(
+        "/api/jobs",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            converterSlug: converter.slug,
+            jobId: activeJobId,
+            inputs: collectedInputs,
+          }),
+        },
+        ENQUEUE_REQUEST_TIMEOUT_MS,
+        t("workflow.startFailed"),
+      );
 
       if (!enqueueRes.ok) {
         const payload = await enqueueRes.json().catch(() => ({}));
