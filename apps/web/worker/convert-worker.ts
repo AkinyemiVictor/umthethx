@@ -1884,7 +1884,10 @@ const worker = new Worker(
       throw error;
     }
   },
-  { connection: connection as unknown as ConnectionOptions },
+  {
+    connection: connection as unknown as ConnectionOptions,
+    concurrency: 1,
+  },
 );
 
 worker.on("failed", async (bullJob, error) => {

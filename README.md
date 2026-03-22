@@ -48,6 +48,25 @@ This repo includes Railway config-as-code files:
 
 If you move the worker to Fly.io, reuse the same Redis envs there so the web app and worker are attached to the same BullMQ queue.
 
+## Worker deployment (Fly.io)
+
+This repo now includes a dedicated Fly worker config at `workers/convert/fly.toml`.
+
+1. Install and authenticate Fly CLI.
+2. Create the Fly app without deploying yet:
+   - `fly launch --no-deploy --copy-config -c workers/convert/fly.toml`
+3. Edit `app = "umthethx-worker"` in `workers/convert/fly.toml` if you want a different app name.
+4. Set worker secrets on Fly:
+   - `fly secrets set REDIS_URL=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... AWS_REGION=... S3_BUCKET=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... -c workers/convert/fly.toml`
+5. Deploy the worker from the repo root:
+   - `fly deploy -c workers/convert/fly.toml .`
+
+Notes:
+- This worker app intentionally has no `services` or `http_service` section because it only consumes BullMQ jobs.
+- The worker command is the same conversion worker already used locally and on Railway.
+- Worker concurrency is pinned to `1` in code to avoid overlapping heavy conversions on a small Fly Machine.
+- Sensitive values should go into Fly secrets, not the `fly.toml` file.
+
 ## Worker container
 
 Builds include LibreOffice, Poppler, Tesseract, ImageMagick, zbar/qrencode, and Python helpers.

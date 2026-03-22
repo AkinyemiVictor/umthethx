@@ -1,0 +1,27 @@
+# Dedicated Fly.io app for the BullMQ conversion worker.
+# Replace the app name before first deploy, or deploy with:
+# fly launch --no-deploy --copy-config -c workers/convert/fly.toml
+# fly deploy -c workers/convert/fly.toml .
+
+app = "umthethx-worker"
+primary_region = "iad"
+kill_signal = "SIGTERM"
+kill_timeout = 300
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[processes]
+  app = "node apps/web/node_modules/tsx/dist/cli.mjs apps/web/worker/convert-worker.ts"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "2gb"
+  processes = ["app"]
+
+[[restart]]
+  policy = "always"
+  processes = ["app"]
