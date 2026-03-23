@@ -13,7 +13,11 @@ kill_timeout = 300
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  strategy = "immediate"
+
 [env]
+  PRIMARY_REGION = "ams"
   NEXT_TELEMETRY_DISABLED = "1"
 
 [processes]

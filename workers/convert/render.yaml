@@ -1,0 +1,31 @@
+services:
+  - type: worker
+    name: umthethx-worker
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    dockerCommand: node apps/web/node_modules/tsx/dist/cli.mjs apps/web/worker/convert-worker.ts
+    numInstances: 1
+    autoDeploy: true
+    maxShutdownDelaySeconds: 300
+    envVars:
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: REDIS_URL
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: LIBRETRANSLATE_URL
+        sync: false
+      - key: LIBRETRANSLATE_API_KEY
+        sync: false
+      - key: MAX_DOCUMENT_PAGES
+        sync: false

@@ -47,37 +47,40 @@ This repo includes Railway config-as-code files:
    - Check web health at `/api/health`
    - Confirm worker logs show it is consuming `converter-jobs`
 
-If you move the worker to Fly.io, reuse the same Redis envs there so the web app and worker are attached to the same BullMQ queue.
+If you move the worker off Railway, reuse the same Redis envs there so the web app and worker are attached to the same BullMQ queue.
 
-## Worker deployment (Fly.io)
+## Worker deployment (Render)
 
-This repo now includes a dedicated Fly worker config at `workers/convert/fly.toml`.
+This repo now includes a dedicated Render worker blueprint at `workers/convert/render.yaml`.
 
-1. Install and authenticate Fly CLI.
-2. Create the Fly app without deploying yet:
-   - `fly launch --no-deploy --copy-config -c workers/convert/fly.toml`
-3. Edit `app = "umthethx-worker"` in `workers/convert/fly.toml` if you want a different app name.
-4. Keep `primary_region` close to your AWS region, not necessarily your Redis region.
-   - For `AWS_REGION=eu-north-1`, this repo uses `primary_region = "arn"` (Stockholm).
-5. Set worker secrets on Fly:
-   - `fly secrets set REDIS_URL=... AWS_REGION=... S3_BUCKET=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... -c workers/convert/fly.toml`
-6. Deploy the worker from the repo root:
-   - `fly deploy -c workers/convert/fly.toml .`
+1. In Render, create a new Blueprint or Background Worker service from this repo.
+2. If you use a Blueprint, set the Blueprint file path to `workers/convert/render.yaml`.
+3. If you configure it manually instead of using the Blueprint:
+   - Service type: Background Worker
+   - Runtime: Docker
+   - Dockerfile path: `./Dockerfile`
+   - Docker context: `.`
+   - Start command: `node apps/web/node_modules/tsx/dist/cli.mjs apps/web/worker/convert-worker.ts`
+4. Keep the worker region close to your AWS region, not necessarily your Redis region.
+   - For `AWS_REGION=eu-north-1`, this repo uses Render region `frankfurt`.
+5. Set worker envs on Render:
+   - Required: `REDIS_URL`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+   - Optional: `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, `MAX_DOCUMENT_PAGES`
+6. Deploy the worker and confirm the service stays healthy in Render logs.
 
 Notes:
-- This worker app intentionally has no `services` or `http_service` section because it only consumes BullMQ jobs.
 - The worker command is the same conversion worker already used locally and on Railway.
-- Worker concurrency is pinned to `1` in code to avoid overlapping heavy conversions on a small Fly Machine.
-- Sensitive values should go into Fly secrets, not the `fly.toml` file.
+- Worker concurrency is pinned to `1` in code to avoid overlapping heavy conversions on a small Render worker instance.
+- Sensitive values should go into Render environment variables or secrets, not committed files.
 
-## Railway + Upstash + Fly checklist
+## Railway + Upstash + Render checklist
 
-Use this order if the app is being split across Railway web, Upstash Redis, and Fly worker.
+Use this order if the app is being split across Railway web, Upstash Redis, and a Render worker.
 
 1. Upstash Redis
    - Create the Redis database.
    - Copy the TCP connection string, preferably `REDIS_URL=rediss://...`.
-   - Put the same Redis env on both Railway web and the Fly worker.
+   - Put the same Redis env on both Railway web and the Render worker.
 
 2. AWS S3 bucket
    - Make sure `S3_BUCKET` exists in the same `AWS_REGION` you configure in the app.
@@ -86,7 +89,7 @@ Use this order if the app is being split across Railway web, Upstash Redis, and 
 
 3. S3 bucket CORS
    - This app uploads directly from the browser to S3 using a signed `PUT` URL.
-   - If CORS is missing or the allowed origin is wrong, the UI will appear stuck at `Uploading...` before Redis or Fly is involved.
+   - If CORS is missing or the allowed origin is wrong, the UI will appear stuck at `Uploading...` before Redis or Render is involved.
    - Add bucket CORS for your production and local origins. Example:
 
 ```json
@@ -109,13 +112,13 @@ Use this order if the app is being split across Railway web, Upstash Redis, and 
    - Required for the converter flow: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `REDIS_URL`
    - Optional or feature-specific: `OPENAI_API_KEY`, `OPENAI_MODEL`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, analytics envs
 
-5. Fly worker envs
+5. Render worker envs
    - Required: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `REDIS_URL`
    - Optional or feature-specific: `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, `MAX_DOCUMENT_PAGES`
 
 6. Deploy order
    - Deploy Railway web first and confirm `https://www.umthethx.online/api/health` returns `ok`
-   - Log in to Fly, create the Fly app, set Fly secrets, then deploy the Fly worker
+   - Create the Render background worker, set Render envs, then deploy the worker
    - Then test one small upload
 
 7. What to test in the browser
@@ -126,7 +129,7 @@ Use this order if the app is being split across Railway web, Upstash Redis, and 
 
 ## If upload is stuck at `Uploading...`
 
-That symptom is almost always before BullMQ and before the Fly worker.
+That symptom is almost always before BullMQ and before the Render worker.
 
 - The client first calls `/api/uploads/sign`
 - Then the browser uploads the file directly to S3 with a signed `PUT`
@@ -142,12 +145,11 @@ So if the UI hangs at `Uploading...`, check these first:
 
 ## What is still manual
 
-The repo changes alone are not enough to create a worker in Fly.io.
+The repo changes alone are not enough to create a worker in Render.
 
-- If you have not run `fly auth login`, you are not authenticated with Fly yet.
-- If you have not run `fly launch --no-deploy --copy-config -c workers/convert/fly.toml`, the Fly app does not exist yet.
-- If you have not run `fly secrets set ...`, the worker has no runtime credentials.
-- If you have not run `fly deploy -c workers/convert/fly.toml .`, there is still no worker Machine processing BullMQ jobs.
+- If you have not created a Render Background Worker service or synced the Blueprint, the worker does not exist yet.
+- If you have not set the required Render environment variables, the worker has no runtime credentials.
+- If you have not deployed the Render worker, there is still no background process consuming BullMQ jobs.
 
 ## Worker container
 
