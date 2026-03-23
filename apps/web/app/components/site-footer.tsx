@@ -58,8 +58,8 @@ const socialLinks = [
     ),
   },
   {
-    label: "LinkedIn",
-    href: "https://linkedin.com/company/umthethx",
+    label: "Facebook",
+    href: "https://facebook.com/umthethx",
     icon: (
       <svg
         aria-hidden="true"
@@ -71,11 +71,10 @@ const socialLinks = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <rect x="4" y="4" width="16" height="16" rx="2" />
-        <path d="M8 11v6" />
-        <path d="M8 8h.01" />
-        <path d="M12 11v6" />
-        <path d="M12 13c0-1.7 3-1.9 3 0v4" />
+        <rect x="4" y="4" width="16" height="16" rx="4" />
+        <path d="M14 8h-1.5a2 2 0 0 0-2 2V12" />
+        <path d="M10.5 12H14" />
+        <path d="M12 12v4" />
       </svg>
     ),
   },

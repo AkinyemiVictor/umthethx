@@ -40,6 +40,10 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileConvertersOpen, setIsMobileConvertersOpen] = useState(false);
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
+  const [isMobileNoteMakerOpen, setIsMobileNoteMakerOpen] = useState(false);
+  const [openMobileNoteMakerGroup, setOpenMobileNoteMakerGroup] = useState<
+    string | null
+  >(null);
   const [isNoteMakerOpen, setIsNoteMakerOpen] = useState(false);
   const [isConvertersOpen, setIsConvertersOpen] = useState(false);
   const [isNoticeVisible, setIsNoticeVisible] = useState(true);
@@ -61,18 +65,42 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
+    setIsMobileConvertersOpen(false);
+    setOpenMobileGroup(null);
+    setIsMobileNoteMakerOpen(false);
+    setOpenMobileNoteMakerGroup(null);
     setIsNoteMakerOpen(false);
     closeConverters();
   };
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
+    setIsMobileConvertersOpen(false);
+    setOpenMobileGroup(null);
+    setIsMobileNoteMakerOpen(false);
+    setOpenMobileNoteMakerGroup(null);
     setIsNoteMakerOpen(false);
     closeConverters();
   };
-  const toggleMobileConverters = () =>
-    setIsMobileConvertersOpen((prev) => !prev);
+  const toggleMobileConverters = () => {
+    const next = !isMobileConvertersOpen;
+    setIsMobileConvertersOpen(next);
+    if (next) {
+      setIsMobileNoteMakerOpen(false);
+      setOpenMobileNoteMakerGroup(null);
+    }
+  };
   const toggleMobileGroup = (title: string) =>
     setOpenMobileGroup((prev) => (prev === title ? null : title));
+  const toggleMobileNoteMaker = () => {
+    const next = !isMobileNoteMakerOpen;
+    setIsMobileNoteMakerOpen(next);
+    if (next) {
+      setIsMobileConvertersOpen(false);
+      setOpenMobileGroup(null);
+    }
+  };
+  const toggleMobileNoteMakerGroup = (groupId: string) =>
+    setOpenMobileNoteMakerGroup((prev) => (prev === groupId ? null : groupId));
   const closeNoteMaker = () => setIsNoteMakerOpen(false);
   const toggleNoteMaker = () =>
     setIsNoteMakerOpen((prev) => {
@@ -340,7 +368,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         aria-modal="true"
         aria-hidden={!isMobileMenuOpen}
         className={[
-          "fixed inset-y-0 right-0 z-[100] w-72 max-w-[85vw] border-l border-zinc-200 bg-white/95 shadow-xl shadow-black/20 backdrop-blur transition-transform duration-300 ease-out dark:border-[var(--border-2)] dark:bg-[var(--surface-1)]",
+          "fixed inset-y-0 right-0 z-[100] flex h-full w-72 max-w-[85vw] flex-col border-l border-zinc-200 bg-white/95 shadow-xl shadow-black/20 backdrop-blur transition-transform duration-300 ease-out dark:border-[var(--border-2)] dark:bg-[var(--surface-1)]",
           isMobileMenuOpen
             ? "translate-x-0"
             : "translate-x-full pointer-events-none",
@@ -374,7 +402,8 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             </svg>
           </button>
         </div>
-        <div className="flex flex-col gap-2 px-4 py-4 text-sm font-semibold text-zinc-700 dark:text-[var(--foreground)]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 text-sm font-semibold text-zinc-700 dark:text-[var(--foreground)]">
+          <div className="flex flex-col gap-2">
           <button
             type="button"
             onClick={toggleMobileConverters}
@@ -461,13 +490,110 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
               </div>
             </div>
           ) : null}
-          <Link
-            href="/ai-notemaker"
-            onClick={closeMobileMenu}
-            className="inline-flex items-center rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
+          <button
+            type="button"
+            onClick={toggleMobileNoteMaker}
+            aria-expanded={isMobileNoteMakerOpen}
+            className="inline-flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
           >
-            {t("header.aiNoteMaker")}
-          </Link>
+            <span>{t("header.aiNoteMaker")}</span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 20 20"
+              className={[
+                "h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]",
+                isMobileNoteMakerOpen ? "rotate-180" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <path
+                d="M5 7.5 10 12.5 15 7.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          {isMobileNoteMakerOpen ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white/80 p-2 text-xs text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
+              <div className="flex flex-col gap-1">
+                {noteMakerGroups.map((group) => {
+                  const isOpen = openMobileNoteMakerGroup === group.id;
+                  return (
+                    <div key={group.id}>
+                      <button
+                        type="button"
+                        onClick={() => toggleMobileNoteMakerGroup(group.id)}
+                        aria-expanded={isOpen}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold text-zinc-800 transition hover:bg-[var(--brand-50)] dark:text-[var(--foreground)]"
+                      >
+                        <span>{t(group.titleKey)}</span>
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className={[
+                            "h-4 w-4 text-zinc-500 transition dark:text-[var(--muted-2)]",
+                            isOpen ? "rotate-180" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <path
+                            d="M5 7.5 10 12.5 15 7.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                      {isOpen ? (
+                        <div className="mt-1 space-y-1 rounded-xl bg-white px-3 py-2 dark:bg-[var(--surface-3)]">
+                          {group.items.map((item) => {
+                            const isActive =
+                              isNoteMakerPage &&
+                              item.mode === currentMode &&
+                              (item.subtype ?? "") === activeSubtype;
+                            return (
+                              <Link
+                                key={`${item.mode}-${item.subtype ?? "base"}`}
+                                href={buildNoteMakerHref(item.mode, item.subtype)}
+                                aria-current={isActive ? "page" : undefined}
+                                onClick={closeMobileMenu}
+                                className={[
+                                  "block rounded-lg px-2 py-2 text-xs transition hover:bg-[var(--brand-50)]",
+                                  isActive
+                                    ? "bg-[var(--brand-50)] text-zinc-900"
+                                    : "text-zinc-600 hover:text-zinc-900",
+                                  "dark:text-[var(--muted)] dark:hover:text-[var(--foreground)]",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                              >
+                                <div className="font-semibold">
+                                  {t(item.labelKey)}
+                                </div>
+                                <div className="mt-1 text-[11px] text-zinc-500 dark:text-[var(--muted-2)]">
+                                  {item.descriptionKey
+                                    ? t(item.descriptionKey)
+                                    : t(group.descriptionKey ?? group.titleKey)}
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          </div>
         </div>
       </div>
 
