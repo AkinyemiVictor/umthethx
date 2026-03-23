@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileChip } from "@repo/ui/file-chip";
 import type { Converter } from "../lib/converters";
 import { ConverterCategoryIcon } from "./converter-category-icon";
@@ -28,6 +28,7 @@ type SiteHeaderProps = {
 
 const maintenanceNotice =
   "Service notice: We are currently carrying out maintenance and resolving a few issues across the website. Some features may be temporarily limited while these improvements are completed. Full service will be restored as soon as possible.";
+const maintenanceNoticeDismissKey = "umthethx-hide-maintenance-notice";
 
 export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleId = "converter-toggle";
@@ -41,6 +42,13 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
   const [isNoteMakerOpen, setIsNoteMakerOpen] = useState(false);
   const [isConvertersOpen, setIsConvertersOpen] = useState(false);
+  const [isNoticeVisible, setIsNoticeVisible] = useState(true);
+
+  useEffect(() => {
+    if (window.localStorage.getItem(maintenanceNoticeDismissKey) === "1") {
+      setIsNoticeVisible(false);
+    }
+  }, []);
 
   const setConvertersOpen = (next: boolean) => {
     if (converterToggleRef.current) {
@@ -74,6 +82,10 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
       }
       return next;
     });
+  const dismissNotice = () => {
+    window.localStorage.setItem(maintenanceNoticeDismissKey, "1");
+    setIsNoticeVisible(false);
+  };
 
   const currentMode = normalizeMode(searchParams?.get("mode"));
   const currentSubtype = searchParams?.get("subtype") ?? "";
@@ -96,7 +108,14 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div
+      className={[
+        "flex flex-col gap-3",
+        isNoticeVisible ? "-mb-3 sm:-mb-4" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <input
         ref={converterToggleRef}
         id={toggleId}
@@ -253,34 +272,58 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         </div>
       </header>
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 shadow-sm shadow-amber-950/5 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-white/70 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/10 dark:text-amber-200">
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+      {isNoticeVisible ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-2.5 text-sm text-amber-950 shadow-sm shadow-amber-950/5 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-white/70 text-amber-700 dark:border-amber-300/30 dark:bg-amber-400/10 dark:text-amber-200">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 8v5" />
+                <path d="M12 16h.01" />
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">
+                  Service Notice
+                </p>
+                <p className="text-sm leading-6 text-amber-950/90 dark:text-amber-50/90">
+                  {maintenanceNotice}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={dismissNotice}
+              aria-label="Dismiss notice"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-amber-300/70 bg-white/70 text-amber-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-300/20 dark:bg-amber-400/10 dark:text-amber-200 dark:hover:bg-amber-400/20"
             >
-              <path d="M12 8v5" />
-              <path d="M12 16h.01" />
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">
-              Service Notice
-            </p>
-            <p className="mt-1 leading-6 text-amber-950/90 dark:text-amber-50/90">
-              {maintenanceNotice}
-            </p>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 6l12 12" />
+                <path d="M18 6L6 18" />
+              </svg>
+            </button>
           </div>
         </div>
-      </div>
+      ) : null}
 
       {isMobileMenuOpen ? (
         <button
