@@ -1,312 +1,127 @@
 # umthethx
 
-Simple upload -> convert -> download tool. No accounts or history.
+Umthethx is a monorepo for the public web app and the background conversion worker.
 
-## Local dev
+## Active deployment model
 
-1. Copy `.env.example` to `.env` and fill required values.
-2. Start Redis: `docker run -d --name umthethx-redis -p 6379:6379 redis:7-alpine`
-3. Install deps: `pnpm install`
-4. Start web (PowerShell): `$env:NEXT_DISABLE_TURBOPACK="1"; pnpm --filter web dev`
-5. Start worker in another terminal: `pnpm --filter web run worker:convert`
+The repo is now aligned to Railway-first deployment:
 
-## Redis config
+- `apps/web`: Railway web service for the frontend and API routes
+- `workers/convert/railway.json`: Railway worker service for BullMQ conversions
+- Railway Redis: shared queue backend via `REDIS_URL`
+- AWS S3: uploads, outputs, and job record storage
 
-BullMQ needs a TCP Redis connection.
+Important: as of March 24, 2026, the active runtime does not consume `DATABASE_URL`. The converter and AI NoteMaker flows run without a relational database in the deployed path. If you want Railway Postgres to become part of runtime state, that requires application code, not only deployment config.
 
-- Local Redis: set `REDIS_URL=redis://localhost:6379`
-- Managed Redis: set `REDIS_URL`, or set `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD`
-- Upstash: use the database host/password values, not only the REST API values
-- TLS is enabled automatically for `*.upstash.io`; set `REDIS_TLS=true` if you need TLS for another host
-- `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are supported as a fallback when the TCP host/password vars are not set
-
-## Online deployment (Railway)
-
-This repo includes Railway config-as-code files:
+## Service config files
 
 - Web service config: `apps/web/railway.json`
 - Worker service config: `workers/convert/railway.json`
+- Worker image: `Dockerfile`
 
-1. Push this repo to GitHub.
-2. Create a new Railway project from that repo.
-3. Provision a Redis instance reachable by both services, either in Railway or externally with Upstash.
-4. Create the web service from the repo and set:
-   - Root Directory: `/`
-   - Config as Code path: `apps/web/railway.json`
-5. Create the worker service from the repo and set:
-   - Root Directory: `/`
-   - Config as Code path: `workers/convert/railway.json`
-6. Set Redis envs on both services:
-   - Railway Redis: `REDIS_URL=${{Redis.REDIS_URL}}`
-   - Upstash: `REDIS_URL` or `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
-7. Set required app secrets:
-   - Web: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, plus Redis envs
-   - Worker: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, plus Redis envs
-   - Feature-specific extras: `OPENAI_API_KEY` for AI NoteMaker, `LIBRETRANSLATE_*` if image translation should call a remote LibreTranslate service
-8. Deploy both services, then:
-   - Check web health at `/api/health`
-   - Confirm worker logs show it is consuming `converter-jobs`
+## Local development
 
-If you move the worker off Railway, reuse the same Redis envs there so the web app and worker are attached to the same BullMQ queue.
+1. Copy `.env.example` to `.env` and fill the required values.
+2. Start Redis locally:
 
-## Worker deployment (Render)
-
-This repo now includes a dedicated Render worker blueprint at `workers/convert/render.yaml`.
-
-1. In Render, create a new Blueprint or Background Worker service from this repo.
-2. If you use a Blueprint, set the Blueprint file path to `workers/convert/render.yaml`.
-3. If you configure it manually instead of using the Blueprint:
-   - Service type: Background Worker
-   - Runtime: Docker
-   - Dockerfile path: `./Dockerfile`
-   - Docker context: `.`
-   - Start command: `node apps/web/node_modules/tsx/dist/cli.mjs apps/web/worker/convert-worker.ts`
-4. Keep the worker region close to your AWS region, not necessarily your Redis region.
-   - For `AWS_REGION=eu-north-1`, this repo uses Render region `frankfurt`.
-5. Set worker envs on Render:
-   - Required: `REDIS_URL`, `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-   - Optional: `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, `MAX_DOCUMENT_PAGES`
-6. Deploy the worker and confirm the service stays healthy in Render logs.
-
-Notes:
-- The worker command is the same conversion worker already used locally and on Railway.
-- Worker concurrency is pinned to `1` in code to avoid overlapping heavy conversions on a small Render worker instance.
-- Sensitive values should go into Render environment variables or secrets, not committed files.
-
-## Railway + Upstash + Render checklist
-
-Use this order if the app is being split across Railway web, Upstash Redis, and a Render worker.
-
-1. Upstash Redis
-   - Create the Redis database.
-   - Copy the TCP connection string, preferably `REDIS_URL=rediss://...`.
-   - Put the same Redis env on both Railway web and the Render worker.
-
-2. AWS S3 bucket
-   - Make sure `S3_BUCKET` exists in the same `AWS_REGION` you configure in the app.
-   - The IAM credentials used by the app need at least `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, and `s3:ListBucket`.
-   - For OCR and PDF text extraction, those AWS credentials also need Textract permissions.
-
-3. S3 bucket CORS
-   - This app uploads directly from the browser to S3 using a signed `PUT` URL.
-   - If CORS is missing or the allowed origin is wrong, the UI will appear stuck at `Uploading...` before Redis or Render is involved.
-   - Add bucket CORS for your production and local origins. Example:
-
-```json
-[
-  {
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedOrigins": [
-      "https://www.umthethx.online",
-      "https://umthethx.online",
-      "http://localhost:3000"
-    ],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
+```bash
+docker run -d --name umthethx-redis -p 6379:6379 redis:7-alpine
 ```
 
-4. Railway web envs
-   - Required for the converter flow: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `REDIS_URL`
-   - Optional or feature-specific: `OPENAI_API_KEY`, `OPENAI_MODEL`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, analytics envs
+3. Install dependencies:
 
-5. Render worker envs
-   - Required: `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `REDIS_URL`
-   - Optional or feature-specific: `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`, `MAX_DOCUMENT_PAGES`
-
-6. Deploy order
-   - Deploy Railway web first and confirm `https://www.umthethx.online/api/health` returns `ok`
-   - Create the Render background worker, set Render envs, then deploy the worker
-   - Then test one small upload
-
-7. What to test in the browser
-   - `POST /api/uploads/sign` should return `200`
-   - The signed S3 `PUT` request should return `200`
-   - `POST /api/jobs` should return `200`
-   - After that, `/api/jobs/{jobId}` should move from `queued` to `processing` to `completed`
-
-## If upload is stuck at `Uploading...`
-
-That symptom is almost always before BullMQ and before the Render worker.
-
-- The client first calls `/api/uploads/sign`
-- Then the browser uploads the file directly to S3 with a signed `PUT`
-- Only after that succeeds does the app call `/api/jobs` and enqueue BullMQ work
-
-So if the UI hangs at `Uploading...`, check these first:
-
-1. Railway web has valid `AWS_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-2. The bucket region matches `AWS_REGION`
-3. The bucket CORS includes `https://www.umthethx.online`
-4. The signed `PUT` request is not getting a `403`, `307`, or CORS failure in the browser Network tab
-5. The IAM user behind the AWS credentials can `PutObject` into the bucket
-
-## What is still manual
-
-The repo changes alone are not enough to create a worker in Render.
-
-- If you have not created a Render Background Worker service or synced the Blueprint, the worker does not exist yet.
-- If you have not set the required Render environment variables, the worker has no runtime credentials.
-- If you have not deployed the Render worker, there is still no background process consuming BullMQ jobs.
-
-## Worker container
-
-Builds include LibreOffice, Poppler, Tesseract, ImageMagick, zbar/qrencode, and Python helpers.
-
-```
-docker build -t umthethx-worker .
-docker run --env-file .env umthethx-worker
+```bash
+pnpm install
 ```
 
-## LibreTranslate
+4. Start the web app:
 
-Image translation uses LibreTranslate (defaults to `http://localhost:5000`).
-
+```bash
+pnpm -C apps/web dev
 ```
+
+5. Start the worker in another terminal:
+
+```bash
+pnpm worker:convert
+```
+
+6. Optional for image translation during local development:
+
+```bash
 docker run -p 5000:5000 libretranslate/libretranslate
 ```
 
-## Output behavior
+## Environment variables
 
-- Multi-page outputs (PDF -> JPG, Word/Excel -> JPG) are zipped.
-- PDF -> HTML returns a zip with HTML + assets.
+Required on both Railway web and Railway worker:
 
----
+- `REDIS_URL`
+- `AWS_REGION`
+- `S3_BUCKET`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
 
-The notes below are from the original Turborepo starter template.
+Web-only:
 
-This Turborepo starter is maintained by the Turborepo core team.
+- `OPENAI_API_KEY` for AI NoteMaker
+- `OPENAI_MODEL` optional override
+- `NEXT_PUBLIC_GA_MEASUREMENT_ID` optional analytics
 
-## Using this example
+Worker-only optional overrides:
 
-Run the following command:
+- `MAX_DOCUMENT_PAGES`
+- `LIBRETRANSLATE_URL`
+- `LIBRETRANSLATE_API_KEY`
+- `LIBRETRANSLATE_TARGET_LANG`
+- `LIBRETRANSLATE_SOURCE_LANG`
 
-```sh
-npx create-turbo@latest
-```
+Local-only binary overrides:
 
-## What's inside?
+- `PYTHON_BIN`
+- `TESSERACT_BIN`
+- `IMAGEMAGICK_BIN`
+- `LIBREOFFICE_BIN`
 
-This Turborepo includes the following packages/apps:
+## Railway deployment
 
-### Apps and Packages
+1. Push the repo to GitHub.
+2. Create a Railway project from the repo.
+3. Add a Redis service in Railway.
+4. Create the web service with:
+   - Root Directory: `/`
+   - Config as Code path: `apps/web/railway.json`
+5. Create the worker service with:
+   - Root Directory: `/`
+   - Config as Code path: `workers/convert/railway.json`
+6. Set shared envs on both services:
+   - `REDIS_URL=${{Redis.REDIS_URL}}`
+   - `AWS_REGION`
+   - `S3_BUCKET`
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+7. Set web-only envs:
+   - `OPENAI_API_KEY`
+   - `OPENAI_MODEL` if you want to override the default
+   - `NEXT_PUBLIC_GA_MEASUREMENT_ID` if analytics is enabled
+8. Set worker-only optional envs if needed:
+   - `MAX_DOCUMENT_PAGES`
+   - `LIBRETRANSLATE_URL`
+   - `LIBRETRANSLATE_API_KEY`
+   - `LIBRETRANSLATE_TARGET_LANG`
+   - `LIBRETRANSLATE_SOURCE_LANG`
+9. Deploy both services.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Deployment verification
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+After deploy:
 
-### Utilities
+- Check the web health endpoint at `/api/health`
+- Confirm the worker logs show it is listening for `converter-jobs`
+- Upload a small file and confirm the job moves from `queued` to `processing` to `completed`
 
-This Turborepo has some additional tools already setup for you:
+## Operational notes
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
-```
-
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+- The worker image already includes LibreOffice, Poppler, Tesseract, ImageMagick, zbar, qrencode, and Python helpers.
+- Railway does not need the local binary override env vars because the worker image provides those tools.
+- Redis is the queue backend. S3 stores uploads, generated outputs, and the JSON job records used by the active runtime.

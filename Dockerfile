@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# Railway worker image for the conversion queue.
 
 FROM node:20-bookworm-slim AS build
 RUN corepack enable
@@ -11,9 +12,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps ./apps
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS=--max_old_space_size=1536
-RUN pnpm --filter web build
 
 FROM node:20-bookworm-slim AS runtime
 RUN corepack enable
@@ -39,8 +37,9 @@ RUN python3 -m venv /opt/venv \
   && /opt/venv/bin/pip install --no-cache-dir pdfplumber pandas openpyxl img2pdf
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PYTHON_BIN="/opt/venv/bin/python"
+ENV NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app
 COPY --from=build /app /app
 
-CMD ["node", "apps/web/node_modules/tsx/dist/cli.mjs", "apps/web/worker/convert-worker.ts"]
+CMD ["pnpm", "-C", "apps/web", "run", "worker:convert"]

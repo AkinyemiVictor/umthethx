@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "node apps/web/node_modules/tsx/dist/cli.mjs apps/web/worker/convert-worker.ts",
+    "startCommand": "pnpm -C apps/web run worker:convert",
     "restartPolicyType": "ALWAYS"
   }
 }
