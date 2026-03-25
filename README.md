@@ -90,10 +90,10 @@ Local-only binary overrides:
 3. Add a Redis service in Railway.
 4. Create the web service with:
    - Root Directory: `/`
-   - Config as Code path: `apps/web/railway.json`
+   - Config as Code path: `/apps/web/railway.json`
 5. Create the worker service with:
    - Root Directory: `/`
-   - Config as Code path: `workers/convert/railway.json`
+   - Config as Code path: `/workers/convert/railway.json`
 6. Set shared envs on both services:
    - `REDIS_URL=${{Redis.REDIS_URL}}`
    - `AWS_REGION`
