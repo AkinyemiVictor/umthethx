@@ -1,8 +1,8 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK",
-    "buildCommand": "corepack enable && pnpm install --frozen-lockfile && NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max_old_space_size=1536 pnpm -C apps/web build"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/web/Dockerfile"
   },
   "deploy": {
     "startCommand": "node apps/web/scripts/start-web.mjs",

@@ -16,6 +16,7 @@ Important: as of March 24, 2026, the active runtime does not consume `DATABASE_U
 ## Service config files
 
 - Web service config: `apps/web/railway.json`
+- Web image: `apps/web/Dockerfile`
 - Worker service config: `workers/convert/railway.json`
 - Worker image: `Dockerfile`
 
