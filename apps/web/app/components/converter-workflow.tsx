@@ -128,6 +128,7 @@ export function ConverterWorkflow({
   formatLine,
 }: ConverterWorkflowProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const pollFailureCountRef = useRef(0);
   const t = useTranslations();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [status, setStatus] = useState<WorkflowStatus | null>(null);
@@ -366,6 +367,12 @@ export function ConverterWorkflow({
       try {
         const res = await fetch(`/api/jobs/${jobId}`);
         if (!res.ok) {
+          pollFailureCountRef.current += 1;
+          if (pollFailureCountRef.current >= 3 && !cancelled) {
+            const payload = await res.json().catch(() => ({}));
+            setError(payload.error || t("workflow.fetchStatusFailed"));
+            setStatus("error");
+          }
           return;
         }
         const payload = (await res.json()) as {
@@ -374,6 +381,7 @@ export function ConverterWorkflow({
           error?: string | null;
         };
         if (cancelled) return;
+        pollFailureCountRef.current = 0;
         setJob({
           id: jobId,
           status: payload.status,
@@ -385,8 +393,10 @@ export function ConverterWorkflow({
           setError(payload.error);
         }
       } catch {
-        if (!cancelled) {
+        pollFailureCountRef.current += 1;
+        if (!cancelled && pollFailureCountRef.current >= 3) {
           setError(t("workflow.fetchStatusFailed"));
+          setStatus("error");
         }
       }
     };
