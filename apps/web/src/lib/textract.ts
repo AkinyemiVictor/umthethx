@@ -34,12 +34,85 @@ const getTextractClient = () => {
   return cachedClient;
 };
 
-const extractLines = (blocks?: Block[]) =>
-  (blocks ?? [])
+const commonShortWords = new Set([
+  "a",
+  "am",
+  "an",
+  "at",
+  "by",
+  "dr",
+  "id",
+  "in",
+  "kg",
+  "lb",
+  "mr",
+  "ms",
+  "no",
+  "of",
+  "on",
+  "or",
+  "oz",
+  "pm",
+  "to",
+  "tv",
+  "uk",
+  "us",
+]);
+
+const normalizeLine = (value: string) =>
+  value
+    .replace(/\u00A0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .trim();
+
+const isLikelyNoiseLine = (text: string, confidence: number) => {
+  if (!/[A-Za-z0-9]/.test(text)) return true;
+  if (/^[|\\/_\-.,:;"'`~()[\]{}=+*]+$/.test(text)) return true;
+
+  const compact = text.replace(/\s+/g, "");
+  if (compact.length === 1) {
+    return true;
+  }
+
+  if (/^[A-Za-z]{1,2}$/.test(compact)) {
+    return confidence < 88 && !commonShortWords.has(compact.toLowerCase());
+  }
+
+  return false;
+};
+
+const extractLines = (blocks?: Block[]) => {
+  const lines = (blocks ?? [])
     .filter((block) => block.BlockType === "LINE" && block.Text)
-    .map((block) => block.Text?.trim())
-    .filter(Boolean)
-    .join("\n");
+    .map((block) => ({
+      text: normalizeLine(block.Text ?? ""),
+      confidence: block.Confidence ?? 100,
+      page: block.Page ?? 1,
+      top: block.Geometry?.BoundingBox?.Top ?? 0,
+      left: block.Geometry?.BoundingBox?.Left ?? 0,
+    }))
+    .filter((line) => Boolean(line.text))
+    .sort((a, b) => {
+      if (a.page !== b.page) return a.page - b.page;
+      const topDiff = a.top - b.top;
+      if (Math.abs(topDiff) > 0.012) return topDiff;
+      return a.left - b.left;
+    });
+
+  const cleaned: string[] = [];
+  for (const line of lines) {
+    if (isLikelyNoiseLine(line.text, line.confidence)) {
+      continue;
+    }
+    if (cleaned[cleaned.length - 1] === line.text) {
+      continue;
+    }
+    cleaned.push(line.text);
+  }
+
+  return cleaned.join("\n");
+};
 
 const sleep = (ms: number) =>
   new Promise((resolve) => {

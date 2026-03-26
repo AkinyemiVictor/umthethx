@@ -48,6 +48,29 @@ const shouldUseTls = (host?: string, url?: string) => {
   return host?.endsWith(".upstash.io") ?? false;
 };
 
+const validateRedisUrl = (value: string) => {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(
+      "REDIS_URL must be a valid redis:// or rediss:// URL.",
+    );
+  }
+
+  if (parsed.protocol !== "redis:" && parsed.protocol !== "rediss:") {
+    throw new Error(
+      "REDIS_URL must start with redis:// or rediss://.",
+    );
+  }
+
+  if (!parsed.hostname) {
+    throw new Error("REDIS_URL must include a hostname.");
+  }
+
+  return parsed;
+};
+
 const buildRedisOptions = (useTls: boolean): RedisOptions => ({
   maxRetriesPerRequest: null,
   enableOfflineQueue: false,
@@ -58,7 +81,11 @@ const buildRedisOptions = (useTls: boolean): RedisOptions => ({
 export const getRedisConnection = () => {
   const redisUrl = readEnv("REDIS_URL");
   if (redisUrl) {
-    return new IORedis(redisUrl, buildRedisOptions(shouldUseTls(undefined, redisUrl)));
+    validateRedisUrl(redisUrl);
+    return new IORedis(
+      redisUrl,
+      buildRedisOptions(shouldUseTls(undefined, redisUrl)),
+    );
   }
 
   const host = readEnv("REDIS_HOST") ?? getUpstashHostFromRestUrl();

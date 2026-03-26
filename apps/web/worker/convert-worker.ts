@@ -58,6 +58,30 @@ const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MIN_OCR_TEXT_SCORE = 5;
 const MIN_PDF_EXTRACTED_TEXT_SCORE = 15;
 const DEFAULT_MAX_DOCUMENT_PAGES = 30;
+const COMMON_SHORT_OCR_WORDS = new Set([
+  "a",
+  "am",
+  "an",
+  "at",
+  "by",
+  "dr",
+  "id",
+  "in",
+  "kg",
+  "lb",
+  "mr",
+  "ms",
+  "no",
+  "of",
+  "on",
+  "or",
+  "oz",
+  "pm",
+  "to",
+  "tv",
+  "uk",
+  "us",
+]);
 
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -925,12 +949,73 @@ const uploadOutput = async (filePath: string, key: string) => {
   );
 };
 
+const normalizeOcrLine = (value: string) =>
+  value
+    .replace(/\u00A0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .trim();
+
+const isOcrNoiseLine = (line: string) => {
+  if (!line) return true;
+  if (!/[A-Za-z0-9]/.test(line)) return true;
+  if (/^[|\\/_\-.,:;"'`~()[\]{}=+*]+$/.test(line)) return true;
+
+  const compact = line.replace(/\s+/g, "");
+  if (compact.length === 1) {
+    return true;
+  }
+
+  if (/^[A-Za-z]{1,2}$/.test(compact)) {
+    return !COMMON_SHORT_OCR_WORDS.has(compact.toLowerCase());
+  }
+
+  return false;
+};
+
+const cleanOcrText = (text: string) => {
+  const rawLines = text.split(/\r?\n/).map(normalizeOcrLine);
+  const cleaned: string[] = [];
+
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const line = rawLines[index];
+    if (!line) continue;
+
+    if (isOcrNoiseLine(line)) {
+      const previous = cleaned[cleaned.length - 1] ?? "";
+      const next = rawLines
+        .slice(index + 1)
+        .find((candidate) => candidate.length > 0) ?? "";
+      const surroundedByLongLines =
+        previous.replace(/\s+/g, "").length >= 8 ||
+        next.replace(/\s+/g, "").length >= 8;
+      if (surroundedByLongLines) {
+        continue;
+      }
+    }
+
+    if (cleaned[cleaned.length - 1] === line) {
+      continue;
+    }
+
+    cleaned.push(line);
+  }
+
+  return cleaned.join("\n").trim();
+};
+
 const scoreOcrText = (text: string) => {
-  const normalized = text.replace(/\s+/g, " ").trim();
+  const cleaned = cleanOcrText(text);
+  const normalized = cleaned.replace(/\s+/g, " ").trim();
+  const lines = cleaned.split(/\r?\n/).filter((line) => line.trim().length > 0);
   const alphaNum = (normalized.match(/[A-Za-z0-9]/g) ?? []).length;
   const words = normalized.length > 0 ? normalized.split(" ").length : 0;
-  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
-  return alphaNum + words * 2 + lines;
+  const usefulLines = lines.filter((line) => {
+    const compact = line.replace(/\s+/g, "");
+    return compact.length >= 4 || /\d/.test(line) || line.includes(" ");
+  }).length;
+  const noisyLines = lines.filter(isOcrNoiseLine).length;
+  return alphaNum + words * 2 + usefulLines * 5 - noisyLines * 10;
 };
 
 const readOcrOutput = async (outputBase: string) => {
@@ -992,11 +1077,22 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
   const outputDir = path.dirname(outputBase);
   const outputBaseName = path.basename(outputBase);
   const attemptBase = path.join(outputDir, `${outputBaseName}-ocr-attempt`);
-  const best = { text: "", score: -1 };
+  const best = { text: "", score: -1, source: "none" };
   const commands = Array.from(new Set([TESSERACT_BIN, "tesseract"]));
   const psmModes = [6, 11];
   let preprocessedPath: string | null = null;
   let hadNonMissingCommandError = false;
+  let textractError: unknown = null;
+
+  const considerCandidate = (text: string, source: string) => {
+    const cleaned = cleanOcrText(text);
+    const score = scoreOcrText(cleaned);
+    if (score > best.score) {
+      best.text = cleaned;
+      best.score = score;
+      best.source = source;
+    }
+  };
 
   const tryCandidate = async (candidatePath: string) => {
     for (const command of commands) {
@@ -1008,11 +1104,7 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
             outputBase: attemptBase,
             psm,
           });
-          const score = scoreOcrText(text);
-          if (score > best.score) {
-            best.text = text;
-            best.score = score;
-          }
+          considerCandidate(text, `${command}:psm${psm}`);
         } catch (error) {
           if (isMissingCommandError(error)) {
             continue;
@@ -1037,16 +1129,24 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
       // Image preprocessing is optional; continue with direct OCR result.
     }
 
-    if (best.score >= MIN_OCR_TEXT_SCORE) {
+    try {
+      const bytes = await readFile(inputPath);
+      const textractText = await detectTextFromImageBytes(bytes);
+      considerCandidate(textractText ?? "", "textract");
+    } catch (error) {
+      textractError = error;
+    }
+
+    if (best.score >= MIN_OCR_TEXT_SCORE && best.text.trim()) {
       await writeFile(`${outputBase}.txt`, best.text, "utf8");
       return `${outputBase}.txt`;
     }
 
-    const bytes = await readFile(inputPath);
-    const text = await detectTextFromImageBytes(bytes);
-    await writeFile(`${outputBase}.txt`, text ?? "", "utf8");
-    return `${outputBase}.txt`;
-  } catch (textractError) {
+    if (best.text.trim()) {
+      await writeFile(`${outputBase}.txt`, best.text, "utf8");
+      return `${outputBase}.txt`;
+    }
+
     const message =
       textractError instanceof Error
         ? textractError.message
