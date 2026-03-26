@@ -72,6 +72,7 @@ Web-only:
 Worker-only optional overrides:
 
 - `MAX_DOCUMENT_PAGES`
+- `WORKER_KEEPALIVE_MS`
 - `LIBRETRANSLATE_URL`
 - `LIBRETRANSLATE_API_KEY`
 - `LIBRETRANSLATE_TARGET_LANG`
@@ -107,11 +108,18 @@ Local-only binary overrides:
    - `NEXT_PUBLIC_GA_MEASUREMENT_ID` if analytics is enabled
 8. Set worker-only optional envs if needed:
    - `MAX_DOCUMENT_PAGES`
+   - `WORKER_KEEPALIVE_MS`
    - `LIBRETRANSLATE_URL`
    - `LIBRETRANSLATE_API_KEY`
    - `LIBRETRANSLATE_TARGET_LANG`
    - `LIBRETRANSLATE_SOURCE_LANG`
 9. Deploy both services.
+
+Important:
+
+- The BullMQ worker must stay awake as a persistent Railway service.
+- Disable Railway Serverless / App Sleeping for the worker service. Redis jobs do not count as inbound traffic that can wake a sleeping worker.
+- The worker now sends a Redis keepalive ping every 60 seconds by default so Railway sees regular outbound traffic after startup.
 
 ## Deployment verification
 

@@ -64,6 +64,10 @@ const MAX_DOCUMENT_PAGES = parsePositiveInteger(
   process.env.MAX_DOCUMENT_PAGES?.trim(),
   DEFAULT_MAX_DOCUMENT_PAGES,
 );
+const WORKER_KEEPALIVE_MS = parsePositiveInteger(
+  process.env.WORKER_KEEPALIVE_MS?.trim(),
+  60_000,
+);
 
 const sanitizeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -1869,6 +1873,10 @@ const processJob = async (jobId: string) => {
 
 const connection = getRedisConnection();
 
+console.log(
+  `[worker] starting converter worker for queue "${QUEUE_NAME}" with keepalive ${WORKER_KEEPALIVE_MS}ms`,
+);
+
 const worker = new Worker(
   QUEUE_NAME,
   async (bullJob) => {
@@ -1890,8 +1898,34 @@ const worker = new Worker(
   },
 );
 
+const keepAliveTimer = setInterval(() => {
+  connection.ping().catch((error) => {
+    console.error("[worker] redis keepalive ping failed", error);
+  });
+}, WORKER_KEEPALIVE_MS);
+
+keepAliveTimer.unref();
+
+worker.on("ready", () => {
+  console.log(`[worker] ready and waiting for jobs on "${QUEUE_NAME}"`);
+});
+
+worker.on("active", (bullJob) => {
+  const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
+  console.log(`[worker] claimed job ${jobId}`);
+});
+
+worker.on("completed", (bullJob) => {
+  const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
+  console.log(`[worker] completed job ${jobId}`);
+});
+
 worker.on("failed", async (bullJob, error) => {
   const jobId = (bullJob?.data as { jobId?: string })?.jobId;
+  console.error(
+    `[worker] failed job ${jobId ?? bullJob?.id ?? "unknown"}`,
+    error,
+  );
   if (jobId) {
     await updateJobRecord(jobId, {
       status: "failed",
@@ -1900,7 +1934,21 @@ worker.on("failed", async (bullJob, error) => {
   }
 });
 
+worker.on("error", (error) => {
+  console.error("[worker] worker error", error);
+});
+
+worker.on("stalled", (jobId) => {
+  console.warn(`[worker] stalled job ${jobId}`);
+});
+
+let shuttingDown = false;
+
 const shutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  clearInterval(keepAliveTimer);
+  console.log("[worker] shutting down");
   await worker.close();
   await connection.quit();
 };
