@@ -30,9 +30,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const scriptsDir = path.join(__dirname, "scripts");
 const repoRoot = path.resolve(__dirname, "../../..");
+const isRailwayRuntime = Boolean(
+  process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.RAILWAY_ENVIRONMENT_NAME,
+);
 
-dotenv.config({ path: path.join(repoRoot, ".env"), override: false });
-dotenv.config({ path: path.join(repoRoot, ".env.local"), override: true });
+if (!isRailwayRuntime) {
+  dotenv.config({ path: path.join(repoRoot, ".env"), override: false });
+  dotenv.config({ path: path.join(repoRoot, ".env.local"), override: true });
+}
 
 const s3 = getS3Client();
 const bucket = getS3Bucket();
@@ -68,6 +75,21 @@ const WORKER_KEEPALIVE_MS = parsePositiveInteger(
   process.env.WORKER_KEEPALIVE_MS?.trim(),
   60_000,
 );
+
+const describeRedisTarget = () => {
+  const redisUrl = process.env.REDIS_URL?.trim();
+  if (redisUrl) {
+    try {
+      return new URL(redisUrl).host;
+    } catch {
+      return "invalid REDIS_URL";
+    }
+  }
+
+  const host = process.env.REDIS_HOST?.trim();
+  const port = process.env.REDIS_PORT?.trim() || "6379";
+  return host ? `${host}:${port}` : "unconfigured";
+};
 
 const sanitizeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -1874,7 +1896,7 @@ const processJob = async (jobId: string) => {
 const connection = getRedisConnection();
 
 console.log(
-  `[worker] starting converter worker for queue "${QUEUE_NAME}" with keepalive ${WORKER_KEEPALIVE_MS}ms`,
+  `[worker] starting converter worker for queue "${QUEUE_NAME}" with keepalive ${WORKER_KEEPALIVE_MS}ms (redis=${describeRedisTarget()}, bucket=${bucket}, region=${process.env.AWS_REGION?.trim() || "unknown"})`,
 );
 
 const worker = new Worker(
