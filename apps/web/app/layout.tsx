@@ -5,6 +5,7 @@ import "./globals.css";
 import { LanguageProvider } from "./components/language-provider";
 import { PageAds } from "./components/page-ads";
 import { getCurrentLanguage } from "./lib/i18n";
+import { defaultMetadata } from "./lib/seo";
 import { getMessages, getTranslator } from "./lib/translations";
 
 const geistSans = localFont({
@@ -17,9 +18,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "umthethx | online ocr converter",
-  description:
-    "Free, ad-supported online file converter for images, documents, and more.",
+  ...defaultMetadata,
   icons: {
     icon: [
       { url: "/favicon.ico", type: "image/x-icon" },
