@@ -149,8 +149,10 @@ const contentTypeByExtension: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
+  avif: "image/avif",
   svg: "image/svg+xml",
   heic: "image/heic",
+  heif: "image/heif",
   webp: "image/webp",
   zip: "application/zip",
 };
@@ -912,7 +914,10 @@ const runImageConvert = async (inputPath: string, outputPath: string) => {
     }
   }
 
-  if (inputExt === "heic" && (outputExt === "jpg" || outputExt === "jpeg")) {
+  if (
+    (inputExt === "heic" || inputExt === "heif") &&
+    (outputExt === "jpg" || outputExt === "jpeg")
+  ) {
     try {
       await runHeicToJpeg(inputPath, outputPath);
       return;
@@ -1713,16 +1718,26 @@ const processJob = async (jobId: string) => {
     suffix?: string,
   ) => {
     const nameBase = suffix ? `${input.baseName}-${suffix}` : input.baseName;
+    const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
+    const sourcePath =
+      inputExt === "heic" || inputExt === "heif"
+        ? await prepareConvertedImage(input, "ocr", "jpg")
+        : input.localPath;
     const outputBase = path.join(outputDir, sanitizeFileName(nameBase));
-    const outputPath = await runTesseractToText(input.localPath, outputBase);
+    const outputPath = await runTesseractToText(sourcePath, outputBase);
     await addOutput(outputPath, buildOutputName(nameBase, "txt"));
   };
 
   const handleOcrDocx = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
+    const sourcePath =
+      inputExt === "heic" || inputExt === "heif"
+        ? await prepareConvertedImage(input, "ocr", "jpg")
+        : input.localPath;
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
-    const textPath = await runTesseractToText(input.localPath, outputBase);
+    const textPath = await runTesseractToText(sourcePath, outputBase);
     const docxPath = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}.docx`,
@@ -1734,8 +1749,13 @@ const processJob = async (jobId: string) => {
   const handleOcrXlsx = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
+    const sourcePath =
+      inputExt === "heic" || inputExt === "heif"
+        ? await prepareConvertedImage(input, "ocr", "jpg")
+        : input.localPath;
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
-    const textPath = await runTesseractToText(input.localPath, outputBase);
+    const textPath = await runTesseractToText(sourcePath, outputBase);
     const text = await readFile(textPath, "utf8");
     const lines = text.split(/\r?\n/).filter(Boolean);
     const xlsxPath = path.join(
@@ -1824,8 +1844,13 @@ const processJob = async (jobId: string) => {
   const handleImageTranslate = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
+    const sourcePath =
+      inputExt === "heic" || inputExt === "heif"
+        ? await prepareConvertedImage(input, "ocr", "jpg")
+        : input.localPath;
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
-    const textPath = await runTesseractToText(input.localPath, outputBase);
+    const textPath = await runTesseractToText(sourcePath, outputBase);
     const text = await readFile(textPath, "utf8");
     const translated = await translateText(text);
     const translatedPath = path.join(
@@ -2048,9 +2073,22 @@ const processJob = async (jobId: string) => {
     await addOutput(zipPath, `${sanitizeFileName(input.baseName)}-html.zip`);
   };
 
+  async function prepareConvertedImage(
+    input: JobInput & { baseName: string; localPath: string },
+    suffix: string,
+    format: "jpg" | "jpeg" | "png",
+  ) {
+    const outputPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}-${suffix}.${format}`,
+    );
+    await runImageConvert(input.localPath, outputPath);
+    return outputPath;
+  }
+
   const handleImageConvert = async (
     input: JobInput & { baseName: string; localPath: string },
-    format: "png" | "jpg" | "jpeg" | "heic",
+    format: "png" | "jpg" | "jpeg" | "heic" | "avif",
   ) => {
     const outputPath = path.join(
       outputDir,
@@ -2141,11 +2179,16 @@ const processJob = async (jobId: string) => {
   const handleImageToPdf = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
+    const sourcePath =
+      inputExt === "heic" || inputExt === "heif"
+        ? await prepareConvertedImage(input, "pdf", "jpg")
+        : input.localPath;
     const outputPath = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}.pdf`,
     );
-    await runImageToPdf(input.localPath, outputPath);
+    await runImageToPdf(sourcePath, outputPath);
     await addOutput(outputPath, buildOutputName(input.baseName, "pdf"));
   };
 
@@ -2204,6 +2247,9 @@ const processJob = async (jobId: string) => {
           case "image-to-text":
           case "jpeg-to-text":
           case "png-to-text":
+          case "heic-to-text":
+          case "heif-to-text":
+          case "tiff-to-text":
             await handleOcrText(input);
             break;
           case "svg-to-text":
@@ -2213,7 +2259,10 @@ const processJob = async (jobId: string) => {
             await handleImageTranslate(input);
             break;
           case "jpg-to-word":
+          case "heic-to-word":
+          case "heif-to-word":
           case "png-to-document":
+          case "tiff-to-word":
             await handleOcrDocx(input);
             break;
           case "jpg-to-excel":
@@ -2230,6 +2279,7 @@ const processJob = async (jobId: string) => {
             await handlePdfTables(input, "xlsx");
             break;
           case "word-to-pdf":
+          case "text-to-pdf":
           case "html-to-pdf": {
             const outputPath = await convertWithLibreOffice(
               input.localPath,
@@ -2254,16 +2304,30 @@ const processJob = async (jobId: string) => {
             await handlePdfToHtml(input);
             break;
           case "jpeg-to-png":
+          case "avif-to-png":
           case "webp-to-png":
             await handleImageConvert(input, "png");
             break;
+          case "jpeg-to-avif":
+          case "png-to-avif":
+          case "heic-to-avif":
+            await handleImageConvert(input, "avif");
+            break;
           case "jpeg-to-heic":
+          case "avif-to-heic":
             await handleImageConvert(input, "heic");
             break;
           case "png-to-jpg":
           case "heic-to-jpg":
             await handleImageConvert(input, "jpg");
             break;
+          case "heif-to-jpeg":
+            await handleImageConvert(input, "jpeg");
+            break;
+          case "heif-to-png":
+            await handleImageConvert(input, "png");
+            break;
+          case "avif-to-jpeg":
           case "webp-to-jpeg":
             await handleImageConvert(input, "jpeg");
             break;
@@ -2282,6 +2346,8 @@ const processJob = async (jobId: string) => {
           case "svg-to-heic":
             await handleSvgToHeic(input);
             break;
+          case "heic-to-pdf":
+          case "heif-to-pdf":
           case "tiff-to-pdf":
           case "jpg-to-pdf":
             await handleImageToPdf(input);

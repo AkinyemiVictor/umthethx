@@ -81,6 +81,7 @@ const mimeByExtension: Record<string, string> = {
   webp: "image/webp",
   avif: "image/avif",
   heic: "image/heic",
+  heif: "image/heif",
   tif: "image/tiff",
   tiff: "image/tiff",
   bmp: "image/bmp",

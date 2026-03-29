@@ -17,6 +17,7 @@ const formatLabelMap: Record<string, string> = {
   docx: "Word",
   gif: "GIF",
   heic: "HEIC",
+  heif: "HEIF",
   html: "HTML",
   image: "Image",
   jfif: "JFIF",
@@ -46,6 +47,7 @@ const formatKeywordAliases: Record<string, string[]> = {
   docx: ["word", "docx"],
   gif: ["gif"],
   heic: ["heic", "iphone photo"],
+  heif: ["heif", "iphone photo"],
   html: ["html", "web page"],
   image: ["image", "photo", "picture"],
   jfif: ["jfif", "jpeg"],
@@ -259,6 +261,30 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
+  if (converter.slug === "heic-to-text") {
+    intentKeywords.push(
+      "heic to text converter",
+      "extract text from heic online",
+      "convert heic to text online",
+    );
+  }
+
+  if (converter.slug === "heif-to-text") {
+    intentKeywords.push(
+      "heif to text converter",
+      "extract text from heif online",
+      "convert heif to text online",
+    );
+  }
+
+  if (converter.slug === "tiff-to-text") {
+    intentKeywords.push(
+      "tiff to text converter",
+      "extract text from tiff online",
+      "convert tiff to text online",
+    );
+  }
+
   if (converter.slug === "svg-to-text") {
     intentKeywords.push(
       "svg to text converter",
@@ -285,12 +311,44 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
-  if (converter.slug === "jpg-to-word" || converter.slug === "png-to-document") {
+  if (
+    [
+      "jpg-to-word",
+      "png-to-document",
+      "heic-to-word",
+      "heif-to-word",
+      "tiff-to-word",
+    ].includes(converter.slug)
+  ) {
     intentKeywords.push(
       "image to word converter",
       "jpg to word converter free",
       "convert image to word online",
       "image to docx converter",
+    );
+  }
+
+  if (converter.slug === "heic-to-word") {
+    intentKeywords.push(
+      "heic to word converter",
+      "convert heic to word online",
+      "heic to docx converter",
+    );
+  }
+
+  if (converter.slug === "heif-to-word") {
+    intentKeywords.push(
+      "heif to word converter",
+      "convert heif to word online",
+      "heif to docx converter",
+    );
+  }
+
+  if (converter.slug === "tiff-to-word") {
+    intentKeywords.push(
+      "tiff to word converter",
+      "convert tiff to word online",
+      "tiff to docx converter",
     );
   }
 
@@ -346,6 +404,40 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
+  if (converter.slug === "heic-to-pdf") {
+    intentKeywords.push(
+      "heic to pdf converter",
+      "convert heic to pdf online",
+      "free heic to pdf converter",
+    );
+  }
+
+  if (converter.slug === "heif-to-pdf") {
+    intentKeywords.push(
+      "heif to pdf converter",
+      "convert heif to pdf online",
+      "free heif to pdf converter",
+    );
+  }
+
+  if (converter.slug === "text-to-pdf") {
+    intentKeywords.push(
+      "text to pdf converter",
+      "txt to pdf converter",
+      "convert text to pdf online",
+      "free text to pdf converter",
+    );
+  }
+
+  if (converter.slug === "jpeg-to-avif") {
+    intentKeywords.push(
+      "jpeg to avif converter",
+      "jpg to avif converter",
+      "convert jpeg to avif online",
+      "free jpeg to avif converter",
+    );
+  }
+
   if (converter.slug === "jpeg-to-heic") {
     intentKeywords.push(
       "jpeg to heic converter",
@@ -355,11 +447,36 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
+  if (converter.slug === "heif-to-jpeg") {
+    intentKeywords.push(
+      "heif to jpeg converter",
+      "heif to jpg converter",
+      "convert heif to jpeg online",
+      "free heif to jpeg converter",
+    );
+  }
+
+  if (converter.slug === "heif-to-png") {
+    intentKeywords.push(
+      "heif to png converter",
+      "convert heif to png online",
+      "free heif to png converter",
+    );
+  }
+
   if (converter.slug === "png-to-svg") {
     intentKeywords.push(
       "png to svg converter",
       "convert png to svg online",
       "free png to svg converter",
+    );
+  }
+
+  if (converter.slug === "png-to-avif") {
+    intentKeywords.push(
+      "png to avif converter",
+      "convert png to avif online",
+      "free png to avif converter",
     );
   }
 
@@ -377,6 +494,14 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "heic to svg converter",
       "convert heic to svg online",
       "free heic to svg converter",
+    );
+  }
+
+  if (converter.slug === "heic-to-avif") {
+    intentKeywords.push(
+      "heic to avif converter",
+      "convert heic to avif online",
+      "free heic to avif converter",
     );
   }
 
@@ -402,6 +527,31 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "svg to heic converter",
       "convert svg to heic online",
       "free svg to heic converter",
+    );
+  }
+
+  if (converter.slug === "avif-to-jpeg") {
+    intentKeywords.push(
+      "avif to jpeg converter",
+      "avif to jpg converter",
+      "convert avif to jpeg online",
+      "free avif to jpeg converter",
+    );
+  }
+
+  if (converter.slug === "avif-to-png") {
+    intentKeywords.push(
+      "avif to png converter",
+      "convert avif to png online",
+      "free avif to png converter",
+    );
+  }
+
+  if (converter.slug === "avif-to-heic") {
+    intentKeywords.push(
+      "avif to heic converter",
+      "convert avif to heic online",
+      "free avif to heic converter",
     );
   }
 

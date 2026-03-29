@@ -35,6 +35,7 @@ const extensionMap: Record<string, Family> = {
   webp: "cyan",
   avif: "cyan",
   heic: "cyan",
+  heif: "cyan",
   tif: "cyan",
   tiff: "cyan",
   bmp: "cyan",
@@ -65,6 +66,7 @@ const mimeToExt: Record<string, string> = {
   "image/webp": "webp",
   "image/avif": "avif",
   "image/heic": "heic",
+  "image/heif": "heif",
   "image/tiff": "tiff",
   "image/bmp": "bmp",
 };
