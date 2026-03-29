@@ -64,17 +64,9 @@ const socialLinks = [
       <svg
         aria-hidden="true"
         viewBox="0 0 24 24"
-        className="h-4 w-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        className="h-4 w-4 fill-current"
       >
-        <rect x="4" y="4" width="16" height="16" rx="4" />
-        <path d="M14 8h-1.5a2 2 0 0 0-2 2V12" />
-        <path d="M10.5 12H14" />
-        <path d="M12 12v4" />
+        <path d="M13.33 20v-6.14h2.06l.31-2.39h-2.37V9.95c0-.69.19-1.16 1.18-1.16h1.26V6.65c-.22-.03-.97-.09-1.84-.09-1.82 0-3.06 1.11-3.06 3.14v1.77H9v2.39h2.21V20h2.12z" />
       </svg>
     ),
   },
