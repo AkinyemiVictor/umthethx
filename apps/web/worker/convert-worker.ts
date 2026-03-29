@@ -2255,9 +2255,6 @@ const processJob = async (jobId: string) => {
           case "svg-to-text":
             await handleSvgToText(input);
             break;
-          case "image-translator":
-            await handleImageTranslate(input);
-            break;
           case "jpg-to-word":
           case "heic-to-word":
           case "heif-to-word":

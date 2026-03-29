@@ -302,15 +302,6 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
-  if (converter.slug === "image-translator") {
-    intentKeywords.push(
-      "image translator online",
-      "translate text from image online",
-      "translate image to text",
-      "photo translator online",
-    );
-  }
-
   if (
     [
       "jpg-to-word",
