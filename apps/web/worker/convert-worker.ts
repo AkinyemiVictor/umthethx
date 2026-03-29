@@ -16,7 +16,7 @@ import {
   getS3Bucket,
   getS3Client,
 } from "../src/lib/s3";
-import { detectTextFromImageBytes } from "../src/lib/textract";
+import { detectTextFromImageBytesDetailed } from "../src/lib/textract";
 import {
   getJobRecord,
   updateJobRecord,
@@ -58,6 +58,13 @@ const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MIN_OCR_TEXT_SCORE = 5;
 const MIN_PDF_EXTRACTED_TEXT_SCORE = 15;
 const DEFAULT_MAX_DOCUMENT_PAGES = 30;
+const OCR_BASE_TARGET_PIXELS = 2200;
+const OCR_MAX_SCALE_FACTOR = 4;
+const OCR_SHARPEN_KERNEL = [
+  [0, -1, 0],
+  [-1, 5, -1],
+  [0, -1, 0],
+];
 const COMMON_SHORT_OCR_WORDS = new Set([
   "a",
   "am",
@@ -230,6 +237,23 @@ type JimpImage = {
   writeAsync: (path: string) => Promise<void>;
   quality?: (value: number) => JimpImage;
   background?: (value: number) => JimpImage;
+  clone: () => JimpImage;
+  getWidth: () => number;
+  getHeight: () => number;
+  grayscale?: () => JimpImage;
+  greyscale?: () => JimpImage;
+  normalize: () => JimpImage;
+  contrast: (value: number) => JimpImage;
+  brightness: (value: number) => JimpImage;
+  scale: (value: number, mode?: string) => JimpImage;
+  gaussian: (radius: number) => JimpImage;
+  threshold: (options: {
+    max: number;
+    replace?: number;
+    autoGreyscale?: boolean;
+  }) => JimpImage;
+  invert: () => JimpImage;
+  convolute: (kernel: number[][]) => JimpImage;
 };
 
 type JimpModule = {
@@ -1004,7 +1028,34 @@ const cleanOcrText = (text: string) => {
   return cleaned.join("\n").trim();
 };
 
-const scoreOcrText = (text: string) => {
+type OcrScoreOptions = {
+  source?: string;
+  averageConfidence?: number;
+  lineCount?: number;
+  lowConfidenceLineCount?: number;
+};
+
+const getSuspiciousOcrTokenPenalty = (token: string) => {
+  const compact = token.replace(/[^A-Za-z0-9'-]/g, "");
+  if (compact.length < 4 || /\d/.test(compact)) {
+    return 0;
+  }
+
+  let penalty = 0;
+  if (!/[aeiouy]/i.test(compact)) {
+    penalty += 4;
+  }
+  if (/([A-Za-z]{1,2})\1{2,}/.test(compact)) {
+    penalty += 4;
+  }
+  if (new Set(compact.toLowerCase()).size <= 2 && compact.length >= 5) {
+    penalty += 3;
+  }
+
+  return penalty;
+};
+
+const scoreOcrText = (text: string, options: OcrScoreOptions = {}) => {
   const cleaned = cleanOcrText(text);
   const normalized = cleaned.replace(/\s+/g, " ").trim();
   const lines = cleaned.split(/\r?\n/).filter((line) => line.trim().length > 0);
@@ -1015,7 +1066,23 @@ const scoreOcrText = (text: string) => {
     return compact.length >= 4 || /\d/.test(line) || line.includes(" ");
   }).length;
   const noisyLines = lines.filter(isOcrNoiseLine).length;
-  return alphaNum + words * 2 + usefulLines * 5 - noisyLines * 10;
+  const suspiciousTokenPenalty = normalized
+    .split(" ")
+    .reduce((sum, token) => sum + getSuspiciousOcrTokenPenalty(token), 0);
+  let score =
+    alphaNum +
+    words * 2 +
+    usefulLines * 5 -
+    noisyLines * 10 -
+    suspiciousTokenPenalty;
+
+  if (options.source?.startsWith("textract")) {
+    score += Math.round((options.averageConfidence ?? 0) / 5);
+    score += Math.min((options.lineCount ?? 0) * 2, 10);
+    score -= (options.lowConfidenceLineCount ?? 0) * 3;
+  }
+
+  return score;
 };
 
 const readOcrOutput = async (outputBase: string) => {
@@ -1025,6 +1092,15 @@ const readOcrOutput = async (outputBase: string) => {
   } catch {
     return "";
   }
+};
+
+const applyJimpGreyscale = (image: JimpImage) => {
+  if (image.greyscale) {
+    image.greyscale();
+    return image;
+  }
+  image.grayscale?.();
+  return image;
 };
 
 const runTesseractAttempt = async (options: {
@@ -1044,33 +1120,74 @@ const runTesseractAttempt = async (options: {
     String(options.psm),
     "-c",
     "preserve_interword_spaces=1",
+    "-c",
+    "user_defined_dpi=300",
   ]);
   return readOcrOutput(options.outputBase);
 };
 
-const buildPreprocessedOcrImage = async (
+const buildPreprocessedOcrImages = async (
   inputPath: string,
   outputDir: string,
   baseName: string,
 ) => {
-  const preprocessedPath = path.join(
-    outputDir,
-    `${sanitizeFileName(baseName)}-ocr-preprocessed.png`,
+  const safeBaseName = sanitizeFileName(baseName);
+  const variants: Array<{ kind: string; path: string }> = [];
+  const jimp = await getJimpModule();
+  const baseImage = await jimp.read(inputPath);
+  const longestSide = Math.max(baseImage.getWidth(), baseImage.getHeight(), 1);
+  const scaleFactor = Math.min(
+    OCR_MAX_SCALE_FACTOR,
+    Math.max(2, OCR_BASE_TARGET_PIXELS / longestSide),
   );
-  await runImageMagick([
-    inputPath,
-    "-auto-orient",
-    "-colorspace",
-    "Gray",
-    "-resize",
-    "200%",
-    "-contrast-stretch",
-    "1%x1%",
-    "-sharpen",
-    "0x1",
-    preprocessedPath,
-  ]);
-  return preprocessedPath;
+
+  const writeVariant = async (
+    suffix: string,
+    transform: (image: JimpImage) => void,
+  ) => {
+    const variantPath = path.join(
+      outputDir,
+      `${safeBaseName}-ocr-${suffix}.png`,
+    );
+    const image = baseImage.clone();
+    applyJimpGreyscale(image);
+    image.normalize();
+    image.scale(scaleFactor);
+    transform(image);
+    await image.writeAsync(variantPath);
+    variants.push({ kind: suffix, path: variantPath });
+  };
+
+  await writeVariant("handwriting", (image) => {
+    image.brightness(0.04);
+    image.contrast(0.3);
+    image.gaussian(1);
+    image.convolute(OCR_SHARPEN_KERNEL);
+  });
+
+  await writeVariant("enhanced", (image) => {
+    image.contrast(0.35);
+    image.convolute(OCR_SHARPEN_KERNEL);
+  });
+
+  await writeVariant("threshold", (image) => {
+    image.contrast(0.65);
+    image.brightness(0.06);
+    image.gaussian(1);
+    image.threshold({ max: 180, autoGreyscale: false });
+    image.convolute(OCR_SHARPEN_KERNEL);
+  });
+
+  await writeVariant("inverted-threshold", (image) => {
+    image.contrast(0.7);
+    image.brightness(0.08);
+    image.gaussian(1);
+    image.threshold({ max: 170, autoGreyscale: false });
+    image.invert();
+    image.convolute(OCR_SHARPEN_KERNEL);
+  });
+
+  return variants;
 };
 
 const runTesseractToText = async (inputPath: string, outputBase: string) => {
@@ -1079,14 +1196,18 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
   const attemptBase = path.join(outputDir, `${outputBaseName}-ocr-attempt`);
   const best = { text: "", score: -1, source: "none" };
   const commands = Array.from(new Set([TESSERACT_BIN, "tesseract"]));
-  const psmModes = [6, 11];
-  let preprocessedPath: string | null = null;
+  const psmModes = [4, 6, 11, 12];
+  const preprocessedPaths: string[] = [];
   let hadNonMissingCommandError = false;
   let textractError: unknown = null;
 
-  const considerCandidate = (text: string, source: string) => {
+  const considerCandidate = (
+    text: string,
+    source: string,
+    options: OcrScoreOptions = {},
+  ) => {
     const cleaned = cleanOcrText(text);
-    const score = scoreOcrText(cleaned);
+    const score = scoreOcrText(cleaned, { source, ...options });
     if (score > best.score) {
       best.text = cleaned;
       best.score = score;
@@ -1115,24 +1236,50 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
     }
   };
 
+  const runTextractCandidate = async (candidatePath: string, source: string) => {
+    const bytes = await readFile(candidatePath);
+    const result = await detectTextFromImageBytesDetailed(bytes);
+    considerCandidate(result.text, source, result);
+    return result;
+  };
+
   try {
     await tryCandidate(inputPath);
 
+    let handwritingVariantPath: string | null = null;
     try {
-      preprocessedPath = await buildPreprocessedOcrImage(
+      const preprocessedImages = await buildPreprocessedOcrImages(
         inputPath,
         outputDir,
         outputBaseName,
       );
-      await tryCandidate(preprocessedPath);
+      preprocessedPaths.push(...preprocessedImages.map((image) => image.path));
+      handwritingVariantPath =
+        preprocessedImages.find((image) => image.kind === "handwriting")?.path ??
+        null;
+      for (const preprocessedImage of preprocessedImages) {
+        await tryCandidate(preprocessedImage.path);
+      }
     } catch {
       // Image preprocessing is optional; continue with direct OCR result.
     }
 
     try {
-      const bytes = await readFile(inputPath);
-      const textractText = await detectTextFromImageBytes(bytes);
-      considerCandidate(textractText ?? "", "textract");
+      const textractResult = await runTextractCandidate(
+        inputPath,
+        "textract:original",
+      );
+      if (
+        handwritingVariantPath &&
+        (!textractResult.text.trim() ||
+          textractResult.averageConfidence < 90 ||
+          textractResult.lowConfidenceLineCount > 0)
+      ) {
+        await runTextractCandidate(
+          handwritingVariantPath,
+          "textract:handwriting",
+        );
+      }
     } catch (error) {
       textractError = error;
     }
@@ -1157,7 +1304,7 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
     throw new Error(`Tesseract not available and Textract failed: ${message}`);
   } finally {
     await rm(`${attemptBase}.txt`, { force: true }).catch(() => undefined);
-    if (preprocessedPath) {
+    for (const preprocessedPath of preprocessedPaths) {
       await rm(preprocessedPath, { force: true }).catch(() => undefined);
     }
   }

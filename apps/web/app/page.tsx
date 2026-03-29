@@ -11,6 +11,7 @@ import { AdSlot } from "./components/ad-slot";
 import { MobileRectangleAds } from "./components/mobile-rectangle-ads";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeader } from "./components/site-header";
+import { HowItWorksSection } from "./components/how-it-works-section";
 import { getCurrentLanguage } from "./lib/i18n";
 import {
   buildMetadata,
@@ -60,14 +61,17 @@ export default async function Home() {
   const showAds = true;
   const howItWorksSteps = [
     {
+      label: t("common.stepLabel", { number: 1 }),
       title: t("home.steps.upload.title"),
       description: t("home.steps.upload.description"),
     },
     {
+      label: t("common.stepLabel", { number: 2 }),
       title: t("home.steps.convert.title"),
       description: t("home.steps.convert.description"),
     },
     {
+      label: t("common.stepLabel", { number: 3 }),
       title: t("home.steps.download.title"),
       description: t("home.steps.download.description"),
     },
@@ -134,36 +138,11 @@ export default async function Home() {
           </AdSlot>
         ) : null}
 
-        <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold">
-                {t("home.howItWorks.title")}
-              </h2>
-              <p className="text-sm text-zinc-600 dark:text-[var(--muted)]">
-                {t("home.howItWorks.description")}
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            {howItWorksSteps.map((step, index) => (
-              <div
-                key={step.title}
-                className="rounded-2xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)] dark:shadow-none"
-              >
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  {t("common.stepLabel", { number: index + 1 })}
-                </div>
-                <div className="mt-2 text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-                  {step.title}
-                </div>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
-                  {step.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <HowItWorksSection
+          title={t("home.howItWorks.title")}
+          description={t("home.howItWorks.description")}
+          steps={howItWorksSteps}
+        />
 
         <section className="sr-only">
           <div className="space-y-1">

@@ -513,7 +513,10 @@ export const getConverterHref = (converter: Converter) =>
     : `/convert/${encodeURIComponent(converter.slug)}`;
 
 export const getConverterPrimaryInput = (converter: Converter) =>
-  converter.accept.extensions[0] || converter.outputFormat;
+  converter.accept.mimeTypes.includes("image/*") &&
+  converter.accept.extensions.length > 1
+    ? "image"
+    : converter.accept.extensions[0] || converter.outputFormat;
 
 export const getConverterAccept = (converter: Converter) => {
   const parts = [

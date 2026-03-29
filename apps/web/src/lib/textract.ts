@@ -82,8 +82,23 @@ const isLikelyNoiseLine = (text: string, confidence: number) => {
   return false;
 };
 
-const extractLines = (blocks?: Block[]) => {
-  const lines = (blocks ?? [])
+type ExtractedLine = {
+  text: string;
+  confidence: number;
+  page: number;
+  top: number;
+  left: number;
+};
+
+export type DetectedTextResult = {
+  text: string;
+  averageConfidence: number;
+  lineCount: number;
+  lowConfidenceLineCount: number;
+};
+
+const extractLineEntries = (blocks?: Block[]) => {
+  const lines: ExtractedLine[] = (blocks ?? [])
     .filter((block) => block.BlockType === "LINE" && block.Text)
     .map((block) => ({
       text: normalizeLine(block.Text ?? ""),
@@ -100,18 +115,49 @@ const extractLines = (blocks?: Block[]) => {
       return a.left - b.left;
     });
 
-  const cleaned: string[] = [];
+  const cleaned: ExtractedLine[] = [];
   for (const line of lines) {
     if (isLikelyNoiseLine(line.text, line.confidence)) {
       continue;
     }
-    if (cleaned[cleaned.length - 1] === line.text) {
+    if (cleaned[cleaned.length - 1]?.text === line.text) {
       continue;
     }
-    cleaned.push(line.text);
+    cleaned.push(line);
   }
 
-  return cleaned.join("\n");
+  return cleaned;
+};
+
+const summarizeDetectedText = (lines: ExtractedLine[]): DetectedTextResult => {
+  if (lines.length === 0) {
+    return {
+      text: "",
+      averageConfidence: 0,
+      lineCount: 0,
+      lowConfidenceLineCount: 0,
+    };
+  }
+
+  const totalConfidence = lines.reduce(
+    (sum, line) => sum + line.confidence,
+    0,
+  );
+  const lowConfidenceLineCount = lines.filter(
+    (line) => line.confidence < 82,
+  ).length;
+
+  return {
+    text: lines.map((line) => line.text).join("\n"),
+    averageConfidence: totalConfidence / lines.length,
+    lineCount: lines.length,
+    lowConfidenceLineCount,
+  };
+};
+
+const extractLines = (blocks?: Block[]) => {
+  const lines = extractLineEntries(blocks);
+  return summarizeDetectedText(lines).text;
 };
 
 const sleep = (ms: number) =>
@@ -126,6 +172,17 @@ export const detectTextFromImageBytes = async (buffer: Uint8Array) => {
     }),
   );
   return extractLines(response.Blocks);
+};
+
+export const detectTextFromImageBytesDetailed = async (
+  buffer: Uint8Array,
+): Promise<DetectedTextResult> => {
+  const response = await getTextractClient().send(
+    new DetectDocumentTextCommand({
+      Document: { Bytes: buffer },
+    }),
+  );
+  return summarizeDetectedText(extractLineEntries(response.Blocks));
 };
 
 export const detectTextFromPdfS3 = async (

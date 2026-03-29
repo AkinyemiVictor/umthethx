@@ -25,6 +25,7 @@ const extensionMap: Record<string, Family> = {
   html: "amber",
   json: "yellow",
   xml: "violet",
+  image: "cyan",
   png: "cyan",
   jpg: "cyan",
   jpeg: "cyan",
