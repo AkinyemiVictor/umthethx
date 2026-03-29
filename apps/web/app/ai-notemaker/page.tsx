@@ -47,8 +47,6 @@ export default async function AiNoteMakerPage() {
           <AiNoteMakerWorkspace />
         </section>
 
-        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
-
         <AdSlot label={t("ads.label")} text={t("ads.text")} />
 
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
@@ -78,6 +76,8 @@ export default async function AiNoteMakerPage() {
             ))}
           </div>
         </section>
+
+        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
 
         <AiNoteMakerTypeGrid />
 

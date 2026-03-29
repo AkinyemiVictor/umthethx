@@ -149,6 +149,9 @@ const contentTypeByExtension: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
+  svg: "image/svg+xml",
+  heic: "image/heic",
+  webp: "image/webp",
   zip: "application/zip",
 };
 
@@ -1743,6 +1746,81 @@ const processJob = async (jobId: string) => {
     await addOutput(xlsxPath, buildOutputName(input.baseName, "xlsx"));
   };
 
+  const decodeXmlEntities = (value: string) =>
+    value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+      const normalized = entity.toLowerCase();
+      if (normalized === "amp") return "&";
+      if (normalized === "lt") return "<";
+      if (normalized === "gt") return ">";
+      if (normalized === "quot") return '"';
+      if (normalized === "apos") return "'";
+
+      if (normalized.startsWith("#x")) {
+        const codePoint = Number.parseInt(normalized.slice(2), 16);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+      }
+
+      if (normalized.startsWith("#")) {
+        const codePoint = Number.parseInt(normalized.slice(1), 10);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+      }
+
+      return match;
+    });
+
+  const extractSvgText = async (inputPath: string) => {
+    const source = await readFile(inputPath, "utf8");
+    const collectMatches = (pattern: RegExp) =>
+      Array.from(source.matchAll(pattern))
+        .map((match) => match[1] ?? "")
+        .map((fragment) => fragment.replace(/<[^>]+>/g, " "))
+        .map((fragment) => decodeXmlEntities(fragment))
+        .map((fragment) => fragment.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+
+    const textLines = collectMatches(/<text\b[^>]*>([\s\S]*?)<\/text>/gi);
+    const lines =
+      textLines.length > 0
+        ? textLines
+        : collectMatches(
+            /<(?:tspan|textPath)\b[^>]*>([\s\S]*?)<\/(?:tspan|textPath)>/gi,
+          );
+
+    return lines.join("\n");
+  };
+
+  const rasterizeSvgInput = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const outputPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}-rasterized.png`,
+    );
+    await runSvgToPng(input.localPath, outputPath);
+    return outputPath;
+  };
+
+  const handleSvgToText = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const extractedText = await extractSvgText(input.localPath);
+    const outputPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}.txt`,
+    );
+
+    if (extractedText) {
+      await writeFile(outputPath, extractedText, "utf8");
+      await addOutput(outputPath, buildOutputName(input.baseName, "txt"));
+      return;
+    }
+
+    const rasterPath = await rasterizeSvgInput(input);
+    const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
+    const textPath = await runTesseractToText(rasterPath, outputBase);
+    await addOutput(textPath, buildOutputName(input.baseName, "txt"));
+  };
+
   const handleImageTranslate = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
@@ -1972,7 +2050,7 @@ const processJob = async (jobId: string) => {
 
   const handleImageConvert = async (
     input: JobInput & { baseName: string; localPath: string },
-    format: "png" | "jpg",
+    format: "png" | "jpg" | "jpeg" | "heic",
   ) => {
     const outputPath = path.join(
       outputDir,
@@ -1982,15 +2060,82 @@ const processJob = async (jobId: string) => {
     await addOutput(outputPath, buildOutputName(input.baseName, format));
   };
 
+  const escapeXmlAttribute = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;");
+
+  const prepareSvgEmbedAsset = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const ext = path.extname(input.localPath).slice(1).toLowerCase();
+    const canEmbedDirectly = ext === "png" || ext === "jpg" || ext === "jpeg";
+    const assetPath = canEmbedDirectly
+      ? input.localPath
+      : path.join(
+          outputDir,
+          `${sanitizeFileName(input.baseName)}-svg-embed.png`,
+        );
+
+    if (!canEmbedDirectly) {
+      await runImageConvert(input.localPath, assetPath);
+    }
+
+    const jimp = await getJimpModule();
+    const image = await jimp.read(assetPath);
+    const mimeType = getContentType(assetPath);
+    const data = await readFile(assetPath);
+
+    return {
+      dataUrl: `data:${mimeType};base64,${data.toString("base64")}`,
+      width: image.getWidth(),
+      height: image.getHeight(),
+    };
+  };
+
+  const handleImageToSvg = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const asset = await prepareSvgEmbedAsset(input);
+    const outputPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}.svg`,
+    );
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${asset.width}" height="${asset.height}" viewBox="0 0 ${asset.width} ${asset.height}"><image href="${escapeXmlAttribute(asset.dataUrl)}" width="${asset.width}" height="${asset.height}" preserveAspectRatio="xMidYMid meet" /></svg>`;
+    await writeFile(outputPath, svg, "utf8");
+    await addOutput(outputPath, buildOutputName(input.baseName, "svg"));
+  };
+
   const handleSvgToPng = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
+    const outputPath = await rasterizeSvgInput(input);
+    await addOutput(outputPath, buildOutputName(input.baseName, "png"));
+  };
+
+  const handleSvgToJpeg = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const rasterPath = await rasterizeSvgInput(input);
     const outputPath = path.join(
       outputDir,
-      `${sanitizeFileName(input.baseName)}.png`,
+      `${sanitizeFileName(input.baseName)}.jpeg`,
     );
-    await runSvgToPng(input.localPath, outputPath);
-    await addOutput(outputPath, buildOutputName(input.baseName, "png"));
+    await runImageConvert(rasterPath, outputPath);
+    await addOutput(outputPath, buildOutputName(input.baseName, "jpeg"));
+  };
+
+  const handleSvgToHeic = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const rasterPath = await rasterizeSvgInput(input);
+    const outputPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}.heic`,
+    );
+    await runImageConvert(rasterPath, outputPath);
+    await addOutput(outputPath, buildOutputName(input.baseName, "heic"));
   };
 
   const handleImageToPdf = async (
@@ -2061,6 +2206,9 @@ const processJob = async (jobId: string) => {
           case "png-to-text":
             await handleOcrText(input);
             break;
+          case "svg-to-text":
+            await handleSvgToText(input);
+            break;
           case "image-translator":
             await handleImageTranslate(input);
             break;
@@ -2069,6 +2217,7 @@ const processJob = async (jobId: string) => {
             await handleOcrDocx(input);
             break;
           case "jpg-to-excel":
+          case "png-to-xlsx":
             await handleOcrXlsx(input);
             break;
           case "pdf-to-text":
@@ -2105,14 +2254,33 @@ const processJob = async (jobId: string) => {
             await handlePdfToHtml(input);
             break;
           case "jpeg-to-png":
+          case "webp-to-png":
             await handleImageConvert(input, "png");
+            break;
+          case "jpeg-to-heic":
+            await handleImageConvert(input, "heic");
             break;
           case "png-to-jpg":
           case "heic-to-jpg":
             await handleImageConvert(input, "jpg");
             break;
+          case "webp-to-jpeg":
+            await handleImageConvert(input, "jpeg");
+            break;
+          case "png-to-svg":
+          case "jpeg-to-svg":
+          case "heic-to-svg":
+          case "webp-to-svg":
+            await handleImageToSvg(input);
+            break;
           case "svg-to-png":
             await handleSvgToPng(input);
+            break;
+          case "svg-to-jpeg":
+            await handleSvgToJpeg(input);
+            break;
+          case "svg-to-heic":
+            await handleSvgToHeic(input);
             break;
           case "tiff-to-pdf":
           case "jpg-to-pdf":

@@ -36,7 +36,7 @@ export function HowItWorksSection({
             <h3 className="mt-2 text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)] sm:text-base">
               {step.title}
             </h3>
-            <p className="mt-2 text-sm leading-7 text-zinc-600 dark:text-[var(--muted)]">
+            <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-[var(--muted)]">
               {step.description}
             </p>
           </article>

@@ -259,6 +259,15 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
+  if (converter.slug === "svg-to-text") {
+    intentKeywords.push(
+      "svg to text converter",
+      "extract text from svg online",
+      "convert svg to text online",
+      "svg text extractor",
+    );
+  }
+
   if (converter.slug === "pdf-to-text") {
     intentKeywords.push(
       "pdf to text converter",
@@ -282,6 +291,24 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "jpg to word converter free",
       "convert image to word online",
       "image to docx converter",
+    );
+  }
+
+  if (converter.slug === "jpg-to-excel") {
+    intentKeywords.push(
+      "jpg to excel converter",
+      "jpeg to excel converter",
+      "convert jpg to excel online",
+      "image to excel converter",
+    );
+  }
+
+  if (converter.slug === "png-to-xlsx") {
+    intentKeywords.push(
+      "png to xlsx converter",
+      "png to excel converter",
+      "convert png to xlsx online",
+      "extract table from png to excel",
     );
   }
 
@@ -316,6 +343,90 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "jpeg to pdf converter",
       "convert jpg to pdf online",
       "jpg to pdf converter free",
+    );
+  }
+
+  if (converter.slug === "jpeg-to-heic") {
+    intentKeywords.push(
+      "jpeg to heic converter",
+      "jpg to heic converter",
+      "convert jpeg to heic online",
+      "free jpeg to heic converter",
+    );
+  }
+
+  if (converter.slug === "png-to-svg") {
+    intentKeywords.push(
+      "png to svg converter",
+      "convert png to svg online",
+      "free png to svg converter",
+    );
+  }
+
+  if (converter.slug === "jpeg-to-svg") {
+    intentKeywords.push(
+      "jpeg to svg converter",
+      "jpg to svg converter",
+      "convert jpeg to svg online",
+      "free jpeg to svg converter",
+    );
+  }
+
+  if (converter.slug === "heic-to-svg") {
+    intentKeywords.push(
+      "heic to svg converter",
+      "convert heic to svg online",
+      "free heic to svg converter",
+    );
+  }
+
+  if (converter.slug === "svg-to-png") {
+    intentKeywords.push(
+      "svg to png converter",
+      "convert svg to png online",
+      "free svg to png converter",
+    );
+  }
+
+  if (converter.slug === "svg-to-jpeg") {
+    intentKeywords.push(
+      "svg to jpeg converter",
+      "svg to jpg converter",
+      "convert svg to jpeg online",
+      "free svg to jpeg converter",
+    );
+  }
+
+  if (converter.slug === "svg-to-heic") {
+    intentKeywords.push(
+      "svg to heic converter",
+      "convert svg to heic online",
+      "free svg to heic converter",
+    );
+  }
+
+  if (converter.slug === "webp-to-jpeg") {
+    intentKeywords.push(
+      "webp to jpeg converter",
+      "webp to jpg converter",
+      "convert webp to jpeg online",
+      "free webp to jpeg converter",
+    );
+  }
+
+  if (converter.slug === "webp-to-png") {
+    intentKeywords.push(
+      "webp to png converter",
+      "convert webp to png online",
+      "free webp to png converter",
+    );
+  }
+
+  if (converter.slug === "webp-to-svg") {
+    intentKeywords.push(
+      "webp to svg converter",
+      "convert webp to svg online",
+      "free webp to svg converter",
     );
   }
 
