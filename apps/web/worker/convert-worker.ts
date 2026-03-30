@@ -60,13 +60,6 @@ if (!isRailwayRuntime) {
 const s3 = getS3Client();
 const bucket = getS3Bucket();
 
-const LIBRETRANSLATE_URL =
-  process.env.LIBRETRANSLATE_URL?.trim() || "http://libretranslate:5000";
-const LIBRETRANSLATE_TARGET =
-  process.env.LIBRETRANSLATE_TARGET_LANG?.trim() || "en";
-const LIBRETRANSLATE_SOURCE =
-  process.env.LIBRETRANSLATE_SOURCE_LANG?.trim() || "auto";
-const LIBRETRANSLATE_API_KEY = process.env.LIBRETRANSLATE_API_KEY?.trim();
 const TESSERACT_BIN = process.env.TESSERACT_BIN?.trim() || "tesseract";
 const TESSERACT_LANG = process.env.TESSERACT_LANG?.trim() || "eng";
 
@@ -1393,31 +1386,6 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
   }
 };
 
-const translateText = async (text: string) => {
-  if (!text.trim()) return text;
-  const response = await fetch(`${LIBRETRANSLATE_URL}/translate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      q: text,
-      source: LIBRETRANSLATE_SOURCE,
-      target: LIBRETRANSLATE_TARGET,
-      format: "text",
-      ...(LIBRETRANSLATE_API_KEY
-        ? { api_key: LIBRETRANSLATE_API_KEY }
-        : {}),
-    }),
-  });
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`LibreTranslate error: ${message}`);
-  }
-  const data = (await response.json()) as { translatedText?: string };
-  return data.translatedText ?? "";
-};
-
 const convertWithLibreOffice = async (
   inputPath: string,
   outputFormat: string,
@@ -1921,26 +1889,6 @@ const processJob = async (
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
     const textPath = await runTesseractToText(rasterPath, outputBase);
     await addOutput(textPath, buildOutputName(input.baseName, "txt"));
-  };
-
-  const handleImageTranslate = async (
-    input: JobInput & { baseName: string; localPath: string },
-  ) => {
-    const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
-    const sourcePath =
-      inputExt === "heic" || inputExt === "heif"
-        ? await prepareConvertedImage(input, "ocr", "jpg")
-        : input.localPath;
-    const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
-    const textPath = await runTesseractToText(sourcePath, outputBase);
-    const text = await readFile(textPath, "utf8");
-    const translated = await translateText(text);
-    const translatedPath = path.join(
-      outputDir,
-      `${sanitizeFileName(input.baseName)}.txt`,
-    );
-    await writeFile(translatedPath, translated, "utf8");
-    await addOutput(translatedPath, buildOutputName(input.baseName, "txt"));
   };
 
   const extractPdfTextContent = async (

@@ -47,12 +47,6 @@ pnpm -C apps/web dev
 pnpm worker:convert
 ```
 
-6. Optional for image translation during local development:
-
-```bash
-docker run -p 5000:5000 libretranslate/libretranslate
-```
-
 ## Environment variables
 
 Required on both Railway web and Railway worker:
@@ -83,10 +77,6 @@ Worker-only optional overrides:
 - `WORKER_MAX_JOBS` default `25` on Railway before a worker exits and restarts
 - `WORKER_INSTANCE_LABEL` optional explicit log label
 - `WORKER_KEEPALIVE_MS`
-- `LIBRETRANSLATE_URL`
-- `LIBRETRANSLATE_API_KEY`
-- `LIBRETRANSLATE_TARGET_LANG`
-- `LIBRETRANSLATE_SOURCE_LANG`
 
 Local-only binary overrides:
 
@@ -127,10 +117,6 @@ Local-only binary overrides:
    - `WORKER_MAX_JOBS`
    - `WORKER_INSTANCE_LABEL`
    - `WORKER_KEEPALIVE_MS`
-   - `LIBRETRANSLATE_URL`
-   - `LIBRETRANSLATE_API_KEY`
-   - `LIBRETRANSLATE_TARGET_LANG`
-   - `LIBRETRANSLATE_SOURCE_LANG`
 9. Deploy both services.
 
 Important:
