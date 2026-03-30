@@ -130,6 +130,7 @@ export function ConverterWorkflow({
 }: ConverterWorkflowProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const pollFailureCountRef = useRef(0);
+  const suppressCloseCleanupUntilRef = useRef(0);
   const t = useTranslations();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [status, setStatus] = useState<WorkflowStatus | null>(null);
@@ -174,6 +175,36 @@ export function ConverterWorkflow({
     setIsCopied(false);
     setJob(null);
     setError(null);
+  };
+
+  const requestCleanup = (
+    targetJobId: string,
+    options: { keepalive?: boolean } = {},
+  ) => {
+    if (!targetJobId || typeof window === "undefined") return;
+    const body = "{}";
+    const url = `/api/jobs/${targetJobId}/cleanup`;
+
+    if (
+      options.keepalive &&
+      typeof navigator !== "undefined" &&
+      typeof navigator.sendBeacon === "function"
+    ) {
+      const sent = navigator.sendBeacon(
+        url,
+        new Blob([body], { type: "application/json" }),
+      );
+      if (sent) {
+        return;
+      }
+    }
+
+    void fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      ...(options.keepalive ? { keepalive: true } : {}),
+    }).catch(() => undefined);
   };
 
   const handleFiles = (selected: File[]) => {
@@ -222,6 +253,15 @@ export function ConverterWorkflow({
 
   const handleClearAll = () => {
     if (isBusy) return;
+    if (
+      jobId &&
+      (job?.status === "completed" ||
+        job?.status === "failed" ||
+        status === "success" ||
+        status === "error")
+    ) {
+      requestCleanup(jobId);
+    }
     setUploads([]);
     resetJobState();
   };
@@ -419,12 +459,39 @@ export function ConverterWorkflow({
     };
 
     poll();
-    const interval = setInterval(poll, 1500);
+    const interval = setInterval(poll, 1000);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
   }, [jobId, status]);
+
+  useEffect(() => {
+    if (!jobId) {
+      return;
+    }
+
+    const isTerminal =
+      job?.status === "completed" ||
+      job?.status === "failed" ||
+      status === "success" ||
+      status === "error";
+    if (!isTerminal) {
+      return;
+    }
+
+    const handlePageHide = () => {
+      if (Date.now() < suppressCloseCleanupUntilRef.current) {
+        return;
+      }
+      requestCleanup(jobId, { keepalive: true });
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [jobId, job?.status, status]);
 
   const textOutputs = useMemo(
     () =>
@@ -675,6 +742,10 @@ export function ConverterWorkflow({
                         <a
                           href={output.downloadUrl}
                           download={output.filename}
+                          onClick={() => {
+                            suppressCloseCleanupUntilRef.current =
+                              Date.now() + 5_000;
+                          }}
                           className="inline-flex items-center justify-center rounded-full border border-[var(--brand-400)] px-3 py-1 text-[11px] font-semibold text-[var(--brand-500)] transition hover:bg-[var(--brand-50)]"
                         >
                           {t("workflow.download")}

@@ -429,6 +429,9 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "convert pdf to xlsx online",
       "extract tables from pdf to xlsx",
       "pdf to spreadsheet converter",
+      "free pdf to xlsx converter",
+      "pdf table to xlsx converter",
+      "pdf to excel spreadsheet online",
     );
   }
 
@@ -438,6 +441,9 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "pdf to word converter",
       "convert pdf to docx online",
       "free pdf to docx converter",
+      "convert pdf to editable word",
+      "pdf to word document online",
+      "pdf to editable docx",
     );
   }
 
@@ -770,12 +776,22 @@ export const getConverterMetadata = (converter: Converter) => {
   const inputLabel = getFormatLabel(getConverterPrimaryInput(converter));
   const outputLabel = getFormatLabel(converter.outputFormat);
   const descriptionVerb = getDescriptionVerb(converter, outputLabel);
-  const description =
+  let description =
     converter.jobType === "convert"
       ? `Free ${converter.title} converter online. Convert ${inputLabel} to ${outputLabel} in seconds and download the result without installing desktop software.`
       : `Free ${converter.title} converter online. ${descriptionVerb} ${inputLabel} files, upload ${getSupportedFormatsLabel(
           converter,
         )} documents, and download clean results in your browser.`;
+
+  if (converter.slug === "pdf-to-docx") {
+    description =
+      "Free PDF to DOCX converter online. Convert PDF files into editable DOCX or Word documents in your browser and download the result in seconds.";
+  }
+
+  if (converter.slug === "pdf-to-xlsx") {
+    description =
+      "Free PDF to XLSX converter online. Extract PDF tables into editable XLSX spreadsheets and download the result without installing desktop software.";
+  }
 
   return buildMetadata({
     title: `Free ${converter.title} Converter Online`,
@@ -788,6 +804,14 @@ export const getConverterMetadata = (converter: Converter) => {
 export const getConverterHeroDescription = (converter: Converter) => {
   const inputLabel = getFormatLabel(getConverterPrimaryInput(converter));
   const outputLabel = getFormatLabel(converter.outputFormat);
+
+  if (converter.slug === "pdf-to-docx") {
+    return "Free PDF to DOCX converter online. Upload PDF files, extract editable text, and download a DOCX or Word document in seconds.";
+  }
+
+  if (converter.slug === "pdf-to-xlsx") {
+    return "Free PDF to XLSX converter online. Upload PDF files, extract tables into spreadsheet rows, and download editable XLSX output in your browser.";
+  }
 
   if (converter.jobType === "ocr") {
     return `Free ${converter.title} converter online. Upload ${inputLabel} files, run OCR in your browser, and download editable ${outputLabel.toLowerCase()} output in seconds.`;
@@ -805,6 +829,20 @@ export const getConverterIntroParagraphs = (converter: Converter) => {
   const outputLabel = getFormatLabel(converter.outputFormat);
   const supportedFormats = getSupportedFormatsLabel(converter);
 
+  if (converter.slug === "pdf-to-docx") {
+    return [
+      "PDF to DOCX is useful when you need to turn a PDF into an editable Word document for rewriting, updating formatting, or reusing content. Upload a PDF file, let Umthethx extract the text online, and download a DOCX file you can open in Microsoft Word or compatible editors.",
+      "This page is tuned for high-intent searches such as pdf to docx converter, pdf to word converter, and convert pdf to editable word online, so the workflow is clear for both users and search engines.",
+    ];
+  }
+
+  if (converter.slug === "pdf-to-xlsx") {
+    return [
+      "PDF to XLSX is built for extracting tables and structured data from PDF files into editable spreadsheet format. Upload a PDF, let Umthethx process the document online, and download an XLSX file for Excel or similar spreadsheet tools.",
+      "This page targets high-intent searches such as pdf to xlsx converter, pdf to excel spreadsheet converter, and extract tables from pdf to xlsx online, which helps search engines understand the exact conversion task.",
+    ];
+  }
+
   return [
     `${converter.title} helps with ${getConverterUseCase(
       converter,
@@ -816,6 +854,22 @@ export const getConverterIntroParagraphs = (converter: Converter) => {
 export const getConverterBenefits = (converter: Converter) => {
   const inputLabel = getFormatLabel(getConverterPrimaryInput(converter));
   const outputLabel = getFormatLabel(converter.outputFormat);
+
+  if (converter.slug === "pdf-to-docx") {
+    return [
+      "PDF to editable DOCX conversion in your browser",
+      "Built for PDF to Word and PDF to DOCX workflows",
+      "No desktop installation required",
+    ];
+  }
+
+  if (converter.slug === "pdf-to-xlsx") {
+    return [
+      "PDF table extraction to editable XLSX spreadsheets",
+      "Built for PDF to Excel and PDF to XLSX workflows",
+      "No desktop installation required",
+    ];
+  }
 
   const items = [
     `${inputLabel} to ${outputLabel} conversion in your browser`,
@@ -838,6 +892,56 @@ export const getConverterFaqs = (converter: Converter): SeoFaq[] => {
   const inputLabel = getFormatLabel(getConverterPrimaryInput(converter));
   const outputLabel = getFormatLabel(converter.outputFormat);
   const supportedFormats = getSupportedFormatsLabel(converter);
+
+  if (converter.slug === "pdf-to-docx") {
+    return [
+      {
+        question: "How do I convert PDF to DOCX online?",
+        answer:
+          "Upload your PDF file, start the PDF to DOCX workflow, and download the generated DOCX file after processing finishes.",
+      },
+      {
+        question: "Does PDF to DOCX create an editable Word document?",
+        answer:
+          "Yes. This workflow is designed to turn PDF content into an editable DOCX file that can be opened in Word-compatible editors.",
+      },
+      {
+        question: "Can I use this as a PDF to Word converter?",
+        answer:
+          "Yes. DOCX is the modern Microsoft Word document format, so this page also serves PDF to Word search intent.",
+      },
+      {
+        question: "Is PDF to DOCX free to use online?",
+        answer:
+          "Yes. Umthethx provides an ad-supported PDF to DOCX workflow so you can convert files online without desktop software.",
+      },
+    ];
+  }
+
+  if (converter.slug === "pdf-to-xlsx") {
+    return [
+      {
+        question: "How do I convert PDF to XLSX online?",
+        answer:
+          "Upload your PDF file, run the PDF to XLSX converter, and download the spreadsheet output when the extraction is complete.",
+      },
+      {
+        question: "Does PDF to XLSX work for tables in a PDF?",
+        answer:
+          "Yes. This workflow is intended for pulling reusable table data from PDF documents into editable XLSX spreadsheet format.",
+      },
+      {
+        question: "Can I use PDF to XLSX as a PDF to Excel converter?",
+        answer:
+          "Yes. XLSX is the standard Excel spreadsheet format, so this page covers both PDF to XLSX and PDF to Excel intent.",
+      },
+      {
+        question: "Is PDF to XLSX free to use online?",
+        answer:
+          "Yes. Umthethx provides an ad-supported PDF to XLSX workflow so you can extract spreadsheet data online without desktop tools.",
+      },
+    ];
+  }
 
   return [
     {

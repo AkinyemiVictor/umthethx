@@ -1,5 +1,6 @@
 import { Queue, type ConnectionOptions } from "bullmq";
 import IORedis, { type RedisOptions } from "ioredis";
+import { getConverterBySlug } from "./converters";
 
 type EnvKey =
   | "REDIS_URL"
@@ -13,10 +14,39 @@ type EnvKey =
 
 const readEnv = (key: EnvKey) => process.env[key]?.trim();
 
-export const QUEUE_NAME = "converter-jobs";
+export const HEAVY_QUEUE_NAME = "converter-jobs-heavy";
+export const LIGHT_QUEUE_NAME = "converter-jobs-light";
+export const CLEANUP_QUEUE_NAME = "converter-jobs-cleanup";
+export const DEFAULT_JOB_RETENTION_MS = 15 * 60 * 1000;
+
+export type ConvertQueueTier = "heavy" | "light";
+
+const HEAVY_ENGINE_HINTS = new Set([
+  "tesseract",
+  "svg-text",
+  "ocr-docx",
+  "ocr-xlsx",
+  "pdf-text-extract",
+  "pdf-table-extract",
+  "pdf-docx",
+  "pdf-image",
+  "pdf-merge",
+  "pdf-split",
+  "pdf-html",
+  "libreoffice",
+  "chrome-print",
+]);
 
 const isTruthy = (value: string) =>
   ["1", "true", "yes", "on"].includes(value.toLowerCase());
+
+const parsePositiveInteger = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return parsed;
+};
 
 const parseRedisPort = (value: string | undefined) => {
   if (!value) return 6379;
@@ -112,7 +142,60 @@ export const getRedisConnection = () => {
   });
 };
 
-export const getQueue = () =>
-  new Queue(QUEUE_NAME, {
+export const getQueue = (queueName: string) =>
+  new Queue(queueName, {
     connection: getRedisConnection() as unknown as ConnectionOptions,
   });
+
+export const getQueueTierForConverterSlug = (
+  converterSlug: string,
+): ConvertQueueTier => {
+  const converter = getConverterBySlug(converterSlug);
+  if (!converter) {
+    throw new Error("Unknown converter slug.");
+  }
+
+  const isHeavyByTag = converter.categoryTags.includes("pdf");
+  const isHeavyByJobType = converter.jobType === "ocr";
+  const isHeavyByEngine = HEAVY_ENGINE_HINTS.has(converter.engineHint);
+
+  return isHeavyByTag || isHeavyByJobType || isHeavyByEngine
+    ? "heavy"
+    : "light";
+};
+
+export const getConvertQueueName = (converterSlug: string) =>
+  getQueueTierForConverterSlug(converterSlug) === "heavy"
+    ? HEAVY_QUEUE_NAME
+    : LIGHT_QUEUE_NAME;
+
+export const JOB_RETENTION_MS = parsePositiveInteger(
+  process.env.JOB_RETENTION_MS?.trim(),
+  DEFAULT_JOB_RETENTION_MS,
+);
+
+export const scheduleJobCleanup = async (
+  jobId: string,
+  delayMs = JOB_RETENTION_MS,
+) => {
+  const queue = getQueue(CLEANUP_QUEUE_NAME);
+  try {
+    await queue.add(
+      "cleanup",
+      { jobId },
+      {
+        jobId: `cleanup:${jobId}`,
+        delay: Math.max(delayMs, 0),
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 60_000,
+        },
+        removeOnComplete: 1000,
+        removeOnFail: 1000,
+      },
+    );
+  } finally {
+    await queue.close().catch(() => undefined);
+  }
+};

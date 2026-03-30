@@ -72,6 +72,16 @@ Web-only:
 Worker-only optional overrides:
 
 - `MAX_DOCUMENT_PAGES`
+- `HEAVY_WORKER_CONCURRENCY` default `1` for OCR, PDF, and office-heavy jobs
+- `HEAVY_WORKER_INPUT_CONCURRENCY` default `2` files processed in parallel inside one heavy job
+- `LIGHT_WORKER_CONCURRENCY` default `4` for simple image/data conversions
+- `LIGHT_WORKER_INPUT_CONCURRENCY` default `1` file at a time inside one light job
+- `CLEANUP_WORKER_CONCURRENCY` default `2`
+- `WORKER_CONCURRENCY` legacy fallback for heavy jobs if you already use it
+- `WORKER_INPUT_CONCURRENCY` legacy fallback for heavy-job file parallelism if you already use it
+- `JOB_RETENTION_MS` default `900000` (15 minutes) for temp uploads and outputs after a job finishes
+- `WORKER_MAX_JOBS` default `25` on Railway before a worker exits and restarts
+- `WORKER_INSTANCE_LABEL` optional explicit log label
 - `WORKER_KEEPALIVE_MS`
 - `LIBRETRANSLATE_URL`
 - `LIBRETRANSLATE_API_KEY`
@@ -108,6 +118,14 @@ Local-only binary overrides:
    - `NEXT_PUBLIC_GA_MEASUREMENT_ID` if analytics is enabled
 8. Set worker-only optional envs if needed:
    - `MAX_DOCUMENT_PAGES`
+   - `HEAVY_WORKER_CONCURRENCY`
+   - `HEAVY_WORKER_INPUT_CONCURRENCY`
+   - `LIGHT_WORKER_CONCURRENCY`
+   - `LIGHT_WORKER_INPUT_CONCURRENCY`
+   - `CLEANUP_WORKER_CONCURRENCY`
+   - `JOB_RETENTION_MS`
+   - `WORKER_MAX_JOBS`
+   - `WORKER_INSTANCE_LABEL`
    - `WORKER_KEEPALIVE_MS`
    - `LIBRETRANSLATE_URL`
    - `LIBRETRANSLATE_API_KEY`
@@ -120,13 +138,20 @@ Important:
 - The BullMQ worker must stay awake as a persistent Railway service.
 - Disable Railway Serverless / App Sleeping for the worker service. Redis jobs do not count as inbound traffic that can wake a sleeping worker.
 - The worker now sends a Redis keepalive ping every 60 seconds by default so Railway sees regular outbound traffic after startup.
+- Conversion traffic is split into three BullMQ queues: heavy conversions, light conversions, and cleanup.
+- Heavy jobs include OCR, PDF, and office/document renders. Light jobs include simple image/data conversions such as format swaps and CSV to JSON.
+- Multiple Railway worker replicas are supported. With two replicas and `HEAVY_WORKER_CONCURRENCY=1`, the heavy queue can process two heavy jobs in parallel while light jobs continue independently.
+- Keep `HEAVY_WORKER_INPUT_CONCURRENCY` low, usually `2`, because OCR and PDF jobs are CPU-heavy.
+- Increase `LIGHT_WORKER_CONCURRENCY` before you increase heavy concurrency if the goal is to speed up simple image-format converters.
+- Temporary uploaded files and generated outputs are now scheduled for cleanup after the retention window, and completed or failed jobs also request cleanup when the user leaves the page.
+- On Railway, each worker replica now defaults to restarting after 25 processed conversion jobs so long-lived memory growth does not accumulate indefinitely.
 
 ## Deployment verification
 
 After deploy:
 
 - Check the web health endpoint at `/api/health`
-- Confirm the worker logs show it is listening for `converter-jobs`
+- Confirm the worker logs show it is listening for `converter-jobs-heavy`, `converter-jobs-light`, and `converter-jobs-cleanup`
 - Upload a small file and confirm the job moves from `queued` to `processing` to `completed`
 
 ## Operational notes

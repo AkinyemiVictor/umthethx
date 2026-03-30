@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getJobRecord, updateJobRecord } from "../../../../src/lib/job-store";
+import { scheduleJobCleanup } from "../../../../src/lib/queue";
 import { signGetObject } from "../../../../src/lib/s3";
 
 export const runtime = "nodejs";
@@ -85,6 +86,7 @@ export async function GET(
       status: "failed",
       error: staleFailure,
     });
+    await scheduleJobCleanup(jobId).catch(() => undefined);
   }
 
   const outputs = await Promise.all(

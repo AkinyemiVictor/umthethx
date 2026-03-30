@@ -22,6 +22,7 @@ import { Document, Packer, Paragraph } from "docx";
 import { PDFDocument } from "pdf-lib";
 import {
   buildArtifactKey,
+  deleteS3Prefix,
   getS3Bucket,
   getS3Client,
 } from "../src/lib/s3";
@@ -33,7 +34,13 @@ import {
   type JobOutput,
 } from "../src/lib/job-store";
 import { getConverterBySlug } from "../src/lib/converters";
-import { QUEUE_NAME, getRedisConnection } from "../src/lib/queue";
+import {
+  CLEANUP_QUEUE_NAME,
+  HEAVY_QUEUE_NAME,
+  LIGHT_QUEUE_NAME,
+  getRedisConnection,
+  scheduleJobCleanup,
+} from "../src/lib/queue";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,10 +118,41 @@ const MAX_DOCUMENT_PAGES = parsePositiveInteger(
   process.env.MAX_DOCUMENT_PAGES?.trim(),
   DEFAULT_MAX_DOCUMENT_PAGES,
 );
+const HEAVY_WORKER_CONCURRENCY = parsePositiveInteger(
+  process.env.HEAVY_WORKER_CONCURRENCY?.trim() ||
+    process.env.WORKER_CONCURRENCY?.trim(),
+  1,
+);
+const LIGHT_WORKER_CONCURRENCY = parsePositiveInteger(
+  process.env.LIGHT_WORKER_CONCURRENCY?.trim(),
+  4,
+);
+const CLEANUP_WORKER_CONCURRENCY = parsePositiveInteger(
+  process.env.CLEANUP_WORKER_CONCURRENCY?.trim(),
+  2,
+);
+const HEAVY_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
+  process.env.HEAVY_WORKER_INPUT_CONCURRENCY?.trim() ||
+    process.env.WORKER_INPUT_CONCURRENCY?.trim(),
+  2,
+);
+const LIGHT_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
+  process.env.LIGHT_WORKER_INPUT_CONCURRENCY?.trim(),
+  1,
+);
+const WORKER_MAX_JOBS = parsePositiveInteger(
+  process.env.WORKER_MAX_JOBS?.trim(),
+  isRailwayRuntime ? 25 : 0,
+);
 const WORKER_KEEPALIVE_MS = parsePositiveInteger(
   process.env.WORKER_KEEPALIVE_MS?.trim(),
   60_000,
 );
+const WORKER_INSTANCE_LABEL =
+  process.env.WORKER_INSTANCE_LABEL?.trim() ||
+  process.env.HOSTNAME?.trim() ||
+  `pid-${process.pid}`;
+const workerLogPrefix = `[worker:${WORKER_INSTANCE_LABEL}]`;
 
 const describeRedisTarget = () => {
   const redisUrl = process.env.REDIS_URL?.trim();
@@ -171,6 +209,32 @@ const contentTypeByExtension: Record<string, string> = {
 const getContentType = (filePath: string) => {
   const ext = path.extname(filePath).slice(1).toLowerCase();
   return contentTypeByExtension[ext] || "application/octet-stream";
+};
+
+const runWithConcurrency = async <T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<void>,
+) => {
+  if (items.length === 0) {
+    return;
+  }
+
+  const maxConcurrent = Math.max(1, Math.min(concurrency, items.length));
+  let nextIndex = 0;
+
+  const runners = Array.from({ length: maxConcurrent }, async () => {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= items.length) {
+        return;
+      }
+      await worker(items[currentIndex] as T, currentIndex);
+    }
+  });
+
+  await Promise.all(runners);
 };
 
 const runCommand = (
@@ -1680,7 +1744,10 @@ const enforceDocumentPageLimit = async (pdfPath: string, fileName: string) => {
   return pageCount;
 };
 
-const processJob = async (jobId: string) => {
+const processJob = async (
+  jobId: string,
+  options: { inputConcurrency: number },
+) => {
   const job = await getJobRecord(jobId);
   if (!job) {
     throw new Error("Job not found.");
@@ -1706,6 +1773,8 @@ const processJob = async (jobId: string) => {
     await updateJobRecord(jobId, { outputs });
   };
 
+  await updateJobRecord(jobId, { status: "processing", error: null });
+
   const baseCounts = new Map<string, number>();
   const preparedInputs = await Promise.all(
     job.inputs.map(async (input, index) => {
@@ -1725,8 +1794,6 @@ const processJob = async (jobId: string) => {
       };
     }),
   );
-
-  await updateJobRecord(jobId, { status: "processing", error: null });
 
   const handleOcrText = async (
     input: JobInput & { baseName: string; localPath: string },
@@ -2335,7 +2402,9 @@ const processJob = async (jobId: string) => {
       ]);
       await addOutput(outputPath, "merged.pdf");
     } else {
-      for (const input of preparedInputs) {
+      const processPreparedInput = async (
+        input: JobInput & { baseName: string; localPath: string },
+      ) => {
         switch (converter.slug) {
           case "image-to-text":
           case "jpeg-to-text":
@@ -2487,7 +2556,13 @@ const processJob = async (jobId: string) => {
           default:
             throw new Error(`Unsupported converter: ${converter.slug}`);
         }
-      }
+      };
+
+      await runWithConcurrency(
+        preparedInputs,
+        options.inputConcurrency,
+        processPreparedInput,
+      );
     }
 
     await updateJobRecord(jobId, { status: "completed", outputs });
@@ -2496,76 +2571,169 @@ const processJob = async (jobId: string) => {
   }
 };
 
-const connection = getRedisConnection();
+const processCleanupJob = async (jobId: string) => {
+  await deleteS3Prefix({ prefix: `temp/${jobId}/` });
+};
+
+type WorkerKind = "heavy" | "light" | "cleanup";
+
+type WorkerQueueConfig = {
+  kind: WorkerKind;
+  queueName: string;
+  concurrency: number;
+  inputConcurrency?: number;
+};
+
+const queueConfigs: WorkerQueueConfig[] = [
+  {
+    kind: "heavy",
+    queueName: HEAVY_QUEUE_NAME,
+    concurrency: HEAVY_WORKER_CONCURRENCY,
+    inputConcurrency: HEAVY_WORKER_INPUT_CONCURRENCY,
+  },
+  {
+    kind: "light",
+    queueName: LIGHT_QUEUE_NAME,
+    concurrency: LIGHT_WORKER_CONCURRENCY,
+    inputConcurrency: LIGHT_WORKER_INPUT_CONCURRENCY,
+  },
+  {
+    kind: "cleanup",
+    queueName: CLEANUP_QUEUE_NAME,
+    concurrency: CLEANUP_WORKER_CONCURRENCY,
+  },
+];
+
+const adminConnection = getRedisConnection();
+let processedJobCount = 0;
+
+const recycleWorkerIfNeeded = () => {
+  if (!WORKER_MAX_JOBS || shuttingDown) {
+    return;
+  }
+
+  processedJobCount += 1;
+  if (processedJobCount < WORKER_MAX_JOBS) {
+    return;
+  }
+
+  console.log(
+    `${workerLogPrefix} processed ${processedJobCount} jobs and will restart to keep memory fresh`,
+  );
+  void shutdown()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error(`${workerLogPrefix} failed to recycle worker cleanly`, error);
+      process.exit(1);
+    });
+};
 
 console.log(
-  `[worker] starting converter worker for queue "${QUEUE_NAME}" with keepalive ${WORKER_KEEPALIVE_MS}ms (redis=${describeRedisTarget()}, bucket=${bucket}, region=${process.env.AWS_REGION?.trim() || "unknown"})`,
+  `${workerLogPrefix} starting converter workers heavy("${HEAVY_QUEUE_NAME}")=${HEAVY_WORKER_CONCURRENCY}/${HEAVY_WORKER_INPUT_CONCURRENCY}, light("${LIGHT_QUEUE_NAME}")=${LIGHT_WORKER_CONCURRENCY}/${LIGHT_WORKER_INPUT_CONCURRENCY}, cleanup("${CLEANUP_QUEUE_NAME}")=${CLEANUP_WORKER_CONCURRENCY}, max jobs ${WORKER_MAX_JOBS || "unlimited"}, and keepalive ${WORKER_KEEPALIVE_MS}ms (redis=${describeRedisTarget()}, bucket=${bucket}, region=${process.env.AWS_REGION?.trim() || "unknown"})`,
 );
 
-const worker = new Worker(
-  QUEUE_NAME,
-  async (bullJob) => {
+const createConvertProcessor =
+  (inputConcurrency: number) => async (bullJob: { data: { jobId?: string } }) => {
     const jobId = (bullJob.data as { jobId?: string }).jobId;
     if (!jobId) {
       throw new Error("Missing jobId.");
     }
     try {
-      await processJob(jobId);
+      await processJob(jobId, { inputConcurrency });
+      await scheduleJobCleanup(jobId).catch((error) => {
+        console.error(
+          `${workerLogPrefix} failed to schedule cleanup for job ${jobId}`,
+          error,
+        );
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Job failed.";
       await updateJobRecord(jobId, { status: "failed", error: message });
+      await scheduleJobCleanup(jobId).catch((scheduleError) => {
+        console.error(
+          `${workerLogPrefix} failed to schedule cleanup for failed job ${jobId}`,
+          scheduleError,
+        );
+      });
       throw error;
     }
-  },
-  {
+  };
+
+const cleanupProcessor = async (bullJob: { data: { jobId?: string } }) => {
+  const jobId = (bullJob.data as { jobId?: string }).jobId;
+  if (!jobId) {
+    throw new Error("Missing jobId.");
+  }
+  await processCleanupJob(jobId);
+};
+
+const workers = queueConfigs.map((config) => {
+  const connection = getRedisConnection();
+  const prefix = `${workerLogPrefix}:${config.kind}`;
+  const processor =
+    config.kind === "cleanup"
+      ? cleanupProcessor
+      : createConvertProcessor(config.inputConcurrency ?? 1);
+
+  const worker = new Worker(config.queueName, processor, {
     connection: connection as unknown as ConnectionOptions,
-    concurrency: 1,
-  },
-);
+    concurrency: config.concurrency,
+  });
+
+  worker.on("ready", () => {
+    console.log(`${prefix} ready and waiting for jobs on "${config.queueName}"`);
+  });
+
+  worker.on("active", (bullJob) => {
+    const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
+    console.log(`${prefix} claimed job ${jobId}`);
+  });
+
+  worker.on("completed", (bullJob) => {
+    const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
+    console.log(`${prefix} completed job ${jobId}`);
+    if (config.kind !== "cleanup") {
+      recycleWorkerIfNeeded();
+    }
+  });
+
+  worker.on("failed", async (bullJob, error) => {
+    const jobId = (bullJob?.data as { jobId?: string })?.jobId;
+    console.error(
+      `${prefix} failed job ${jobId ?? bullJob?.id ?? "unknown"}`,
+      error,
+    );
+    if (jobId && config.kind !== "cleanup") {
+      await updateJobRecord(jobId, {
+        status: "failed",
+        error: error instanceof Error ? error.message : "Job failed.",
+      });
+    }
+    if (config.kind !== "cleanup") {
+      recycleWorkerIfNeeded();
+    }
+  });
+
+  worker.on("error", (error) => {
+    console.error(`${prefix} worker error`, error);
+  });
+
+  worker.on("stalled", (jobId) => {
+    console.warn(`${prefix} stalled job ${jobId}`);
+  });
+
+  return { worker, connection };
+});
 
 const keepAliveTimer = setInterval(() => {
-  connection.ping().catch((error) => {
-    console.error("[worker] redis keepalive ping failed", error);
+  adminConnection.ping().catch((error) => {
+    console.error(`${workerLogPrefix} redis keepalive ping failed`, error);
   });
 }, WORKER_KEEPALIVE_MS);
 
 keepAliveTimer.unref();
-
-worker.on("ready", () => {
-  console.log(`[worker] ready and waiting for jobs on "${QUEUE_NAME}"`);
-});
-
-worker.on("active", (bullJob) => {
-  const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
-  console.log(`[worker] claimed job ${jobId}`);
-});
-
-worker.on("completed", (bullJob) => {
-  const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
-  console.log(`[worker] completed job ${jobId}`);
-});
-
-worker.on("failed", async (bullJob, error) => {
-  const jobId = (bullJob?.data as { jobId?: string })?.jobId;
-  console.error(
-    `[worker] failed job ${jobId ?? bullJob?.id ?? "unknown"}`,
-    error,
-  );
-  if (jobId) {
-    await updateJobRecord(jobId, {
-      status: "failed",
-      error: error instanceof Error ? error.message : "Job failed.",
-    });
-  }
-});
-
-worker.on("error", (error) => {
-  console.error("[worker] worker error", error);
-});
-
-worker.on("stalled", (jobId) => {
-  console.warn(`[worker] stalled job ${jobId}`);
-});
 
 let shuttingDown = false;
 
@@ -2573,9 +2741,10 @@ const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
   clearInterval(keepAliveTimer);
-  console.log("[worker] shutting down");
-  await worker.close();
-  await connection.quit();
+  console.log(`${workerLogPrefix} shutting down`);
+  await Promise.allSettled(workers.map(({ worker }) => worker.close()));
+  await Promise.allSettled(workers.map(({ connection }) => connection.quit()));
+  await adminConnection.quit();
 };
 
 process.on("SIGINT", shutdown);

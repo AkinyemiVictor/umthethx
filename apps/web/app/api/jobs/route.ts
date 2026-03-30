@@ -6,7 +6,7 @@ import {
   updateJobRecord,
   type JobInput,
 } from "../../../src/lib/job-store";
-import { getQueue } from "../../../src/lib/queue";
+import { getConvertQueueName, getQueue } from "../../../src/lib/queue";
 
 export const runtime = "nodejs";
 
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
 
   let queue: ReturnType<typeof getQueue> | null = null;
   try {
-    queue = getQueue();
+    queue = getQueue(getConvertQueueName(converter.slug));
     await queue.add(
       "convert",
       {
