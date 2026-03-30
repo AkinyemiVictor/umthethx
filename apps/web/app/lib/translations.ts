@@ -260,7 +260,7 @@ export const translations = {
       "Supported formats: {formats} and more.",
     "converterPage.supportedFormatsSingle": "Supported format: {formats}.",
     "workflow.dropLabel": "Drop, upload, or paste files",
-    "workflow.browseFiles": "Browse files",
+    "workflow.browseFiles": "Upload file",
     "workflow.dragAndDrop": "or drag and drop",
     "workflow.noFilesSelected": "No files selected yet.",
     "workflow.selectedFiles": "Selected files",

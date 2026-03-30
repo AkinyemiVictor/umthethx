@@ -277,6 +277,14 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
+  if (converter.slug === "avif-to-text") {
+    intentKeywords.push(
+      "avif to text converter",
+      "extract text from avif online",
+      "convert avif to text online",
+    );
+  }
+
   if (converter.slug === "tiff-to-text") {
     intentKeywords.push(
       "tiff to text converter",
@@ -308,6 +316,7 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "png-to-document",
       "heic-to-word",
       "heif-to-word",
+      "avif-to-docx",
       "tiff-to-word",
     ].includes(converter.slug)
   ) {
@@ -343,6 +352,14 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
+  if (converter.slug === "avif-to-docx") {
+    intentKeywords.push(
+      "avif to docx converter",
+      "avif to word converter",
+      "convert avif to docx online",
+    );
+  }
+
   if (converter.slug === "jpg-to-excel") {
     intentKeywords.push(
       "jpg to excel converter",
@@ -361,12 +378,66 @@ export const getConverterSeoKeywords = (converter: Converter) => {
     );
   }
 
+  if (converter.slug === "avif-to-xlsx") {
+    intentKeywords.push(
+      "avif to xlsx converter",
+      "avif to excel converter",
+      "convert avif to xlsx online",
+      "extract table from avif to excel",
+    );
+  }
+
+  if (converter.slug === "heic-to-xlsx") {
+    intentKeywords.push(
+      "heic to xlsx converter",
+      "heic to excel converter",
+      "convert heic to xlsx online",
+      "extract table from heic to excel",
+    );
+  }
+
+  if (converter.slug === "heif-to-xlsx") {
+    intentKeywords.push(
+      "heif to xlsx converter",
+      "heif to excel converter",
+      "convert heif to xlsx online",
+      "extract table from heif to excel",
+    );
+  }
+
+  if (converter.slug === "tiff-to-xlsx") {
+    intentKeywords.push(
+      "tiff to xlsx converter",
+      "tiff to excel converter",
+      "convert tiff to xlsx online",
+      "extract table from tiff to excel",
+    );
+  }
+
   if (converter.slug === "pdf-to-excel") {
     intentKeywords.push(
       "pdf to excel converter",
       "extract tables from pdf to excel",
       "pdf table to excel converter",
       "convert pdf to excel online",
+    );
+  }
+
+  if (converter.slug === "pdf-to-xlsx") {
+    intentKeywords.push(
+      "pdf to xlsx converter",
+      "convert pdf to xlsx online",
+      "extract tables from pdf to xlsx",
+      "pdf to spreadsheet converter",
+    );
+  }
+
+  if (converter.slug === "pdf-to-docx") {
+    intentKeywords.push(
+      "pdf to docx converter",
+      "pdf to word converter",
+      "convert pdf to docx online",
+      "free pdf to docx converter",
     );
   }
 
@@ -383,6 +454,57 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "pdf to jpg converter",
       "pdf to image converter",
       "convert pdf to jpg online",
+    );
+  }
+
+  if (converter.slug === "pdf-to-jpeg") {
+    intentKeywords.push(
+      "pdf to jpeg converter",
+      "pdf to image converter",
+      "convert pdf to jpeg online",
+      "pdf to jpeg free",
+    );
+  }
+
+  if (converter.slug === "pdf-to-png") {
+    intentKeywords.push(
+      "pdf to png converter",
+      "convert pdf to png online",
+      "free pdf to png converter",
+      "pdf pages to png",
+    );
+  }
+
+  if (converter.slug === "pdf-to-tiff") {
+    intentKeywords.push(
+      "pdf to tiff converter",
+      "convert pdf to tiff online",
+      "free pdf to tif converter",
+      "pdf pages to tiff",
+    );
+  }
+
+  if (converter.slug === "pdf-to-heic") {
+    intentKeywords.push(
+      "pdf to heic converter",
+      "convert pdf to heic online",
+      "free pdf to heic converter",
+    );
+  }
+
+  if (converter.slug === "pdf-to-heif") {
+    intentKeywords.push(
+      "pdf to heif converter",
+      "convert pdf to heif online",
+      "free pdf to heif converter",
+    );
+  }
+
+  if (converter.slug === "pdf-to-avif") {
+    intentKeywords.push(
+      "pdf to avif converter",
+      "convert pdf to avif online",
+      "free pdf to avif converter",
     );
   }
 
@@ -408,6 +530,40 @@ export const getConverterSeoKeywords = (converter: Converter) => {
       "heif to pdf converter",
       "convert heif to pdf online",
       "free heif to pdf converter",
+    );
+  }
+
+  if (converter.slug === "png-to-pdf") {
+    intentKeywords.push(
+      "png to pdf converter",
+      "convert png to pdf online",
+      "free png to pdf converter",
+      "png to pdf free",
+    );
+  }
+
+  if (converter.slug === "avif-to-pdf") {
+    intentKeywords.push(
+      "avif to pdf converter",
+      "convert avif to pdf online",
+      "free avif to pdf converter",
+    );
+  }
+
+  if (converter.slug === "webp-to-pdf") {
+    intentKeywords.push(
+      "webp to pdf converter",
+      "convert webp to pdf online",
+      "free webp to pdf converter",
+    );
+  }
+
+  if (converter.slug === "svg-to-pdf") {
+    intentKeywords.push(
+      "svg to pdf converter",
+      "convert svg to pdf online",
+      "free svg to pdf converter",
+      "svg to pdf free",
     );
   }
 

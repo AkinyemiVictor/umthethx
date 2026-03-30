@@ -56,7 +56,7 @@ export function ConverterGrid({
                 {group.description}
               </p>
             </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+            <div className="mt-3 grid justify-start gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),12rem))]">
               {group.items.map((item) => {
                 const isActive = item.slug === currentSlug;
                 return (

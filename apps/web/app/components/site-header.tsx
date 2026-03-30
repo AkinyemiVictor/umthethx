@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { FileChip } from "@repo/ui/file-chip";
 import type { Converter } from "../lib/converters";
 import { ConverterCategoryIcon } from "./converter-category-icon";
@@ -26,11 +26,6 @@ type SiteHeaderProps = {
   currentSlug?: string;
 };
 
-const serviceRestoredNotice =
-  "All services have been fully restored and the platform is operating normally. Thank you for your patience while we completed these improvements.";
-const serviceRestoredNoticeDismissKey =
-  "umthethx-hide-service-restored-notice-v1";
-
 export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleId = "converter-toggle";
   const converterGroups = getConverterCategoryGroups(converters);
@@ -47,13 +42,6 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   >(null);
   const [isNoteMakerOpen, setIsNoteMakerOpen] = useState(false);
   const [isConvertersOpen, setIsConvertersOpen] = useState(false);
-  const [isNoticeVisible, setIsNoticeVisible] = useState(true);
-
-  useEffect(() => {
-    if (window.localStorage.getItem(serviceRestoredNoticeDismissKey) === "1") {
-      setIsNoticeVisible(false);
-    }
-  }, []);
 
   const setConvertersOpen = (next: boolean) => {
     if (converterToggleRef.current) {
@@ -111,10 +99,6 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
       }
       return next;
     });
-  const dismissNotice = () => {
-    window.localStorage.setItem(serviceRestoredNoticeDismissKey, "1");
-    setIsNoticeVisible(false);
-  };
 
   const currentMode = normalizeMode(searchParams?.get("mode"));
   const currentSubtype = searchParams?.get("subtype") ?? "";
@@ -137,14 +121,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   };
 
   return (
-    <div
-      className={[
-        "flex flex-col gap-3",
-        isNoticeVisible ? "-mb-3 sm:-mb-4" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
+    <div className="flex flex-col">
       <input
         ref={converterToggleRef}
         id={toggleId}
@@ -301,57 +278,6 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         </div>
       </header>
 
-      {isNoticeVisible ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-2.5 text-sm text-emerald-950 shadow-sm shadow-emerald-950/5 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-100">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-300 bg-white/70 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-400/10 dark:text-emerald-200">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-3.5 w-3.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">
-                  Service Update
-                </p>
-                <p className="text-sm leading-6 text-emerald-950/90 dark:text-emerald-50/90">
-                  {serviceRestoredNotice}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={dismissNotice}
-              aria-label="Dismiss service update"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-emerald-300/70 bg-white/70 text-emerald-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-300/20 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20"
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M6 6l12 12" />
-                <path d="M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {isMobileMenuOpen ? (
         <button
           type="button"
@@ -495,7 +421,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             aria-expanded={isMobileNoteMakerOpen}
             className="inline-flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)]"
           >
-            <span>{t("header.aiNoteMaker")}</span>
+            <span>{t("header.noteMakerTypes")}</span>
             <svg
               aria-hidden="true"
               viewBox="0 0 20 20"

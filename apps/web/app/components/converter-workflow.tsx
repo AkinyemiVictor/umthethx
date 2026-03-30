@@ -144,8 +144,24 @@ export function ConverterWorkflow({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const searchParams = useSearchParams();
   const initialJobId = searchParams?.get("jobId");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const update = () => setIsCoarsePointer(query.matches);
+    update();
+
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", update);
+      return () => query.removeEventListener("change", update);
+    }
+
+    query.addListener(update);
+    return () => query.removeListener(update);
+  }, []);
 
   const resetJobState = () => {
     setStatus(null);
@@ -553,8 +569,8 @@ export function ConverterWorkflow({
           </div>
         ) : (
           <div
-            role="button"
-            tabIndex={0}
+            role={isCoarsePointer ? undefined : "button"}
+            tabIndex={isCoarsePointer ? undefined : 0}
             onDragOver={(event) => {
               event.preventDefault();
               setIsDragging(true);
@@ -562,12 +578,18 @@ export function ConverterWorkflow({
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onKeyDown={(event) => {
+              if (isCoarsePointer) return;
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 inputRef.current?.click();
               }
             }}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => {
+              if (!isCoarsePointer) {
+                inputRef.current?.click();
+              }
+            }}
+            style={{ touchAction: "pan-y" }}
             className={[
               "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition lg:h-[360px] lg:min-h-[360px]",
               "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",

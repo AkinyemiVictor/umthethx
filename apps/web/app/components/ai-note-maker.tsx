@@ -66,6 +66,7 @@ export function AiNoteMakerWorkspace() {
   const [isCopied, setIsCopied] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
 
   const hasNotes = Boolean(notes.trim().length);
 
@@ -118,6 +119,21 @@ export function AiNoteMakerWorkspace() {
     setMode(nextMode);
     setSubtype(nextSubtype);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const update = () => setIsCoarsePointer(query.matches);
+    update();
+
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", update);
+      return () => query.removeEventListener("change", update);
+    }
+
+    query.addListener(update);
+    return () => query.removeListener(update);
+  }, []);
 
   const handleFiles = (selected: File[]) => {
     if (!selected.length) return;
@@ -413,8 +429,8 @@ export function AiNoteMakerWorkspace() {
           <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-2xl border border-zinc-300 bg-white p-4 shadow-sm shadow-black/10 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-none lg:h-[360px] lg:min-h-[360px] flex flex-col">
               <div
-                role="button"
-                tabIndex={0}
+                role={isCoarsePointer ? undefined : "button"}
+                tabIndex={isCoarsePointer ? undefined : 0}
                 onDragOver={(event) => {
                   event.preventDefault();
                   setIsDragging(true);
@@ -422,12 +438,18 @@ export function AiNoteMakerWorkspace() {
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 onKeyDown={(event) => {
+                  if (isCoarsePointer) return;
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     inputRef.current?.click();
                   }
                 }}
-                onClick={() => inputRef.current?.click()}
+                onClick={() => {
+                  if (!isCoarsePointer) {
+                    inputRef.current?.click();
+                  }
+                }}
+                style={{ touchAction: "pan-y" }}
                 className={[
                   "flex flex-1 flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition",
                   "border-zinc-300 bg-zinc-50/70 shadow-sm shadow-black/10",

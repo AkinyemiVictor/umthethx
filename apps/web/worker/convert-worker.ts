@@ -1,7 +1,16 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { Worker, type ConnectionOptions } from "bullmq";
 import { createReadStream, createWriteStream } from "fs";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { pipeline } from "stream/promises";
@@ -153,6 +162,8 @@ const contentTypeByExtension: Record<string, string> = {
   svg: "image/svg+xml",
   heic: "image/heic",
   heif: "image/heif",
+  tif: "image/tiff",
+  tiff: "image/tiff",
   webp: "image/webp",
   zip: "application/zip",
 };
@@ -1366,8 +1377,7 @@ const convertWithLibreOffice = async (
   return path.join(outputDir, `${base}.${outputFormat}`);
 };
 
-const buildDocxFromText = async (textPath: string, outputPath: string) => {
-  const text = await readFile(textPath, "utf8");
+const buildDocxFromTextContent = async (text: string, outputPath: string) => {
   const lines = text.split(/\r?\n/);
   const children =
     lines.length > 0
@@ -1378,6 +1388,11 @@ const buildDocxFromText = async (textPath: string, outputPath: string) => {
   });
   const buffer = await Packer.toBuffer(doc);
   await writeFile(outputPath, buffer);
+};
+
+const buildDocxFromText = async (textPath: string, outputPath: string) => {
+  const text = await readFile(textPath, "utf8");
+  await buildDocxFromTextContent(text, outputPath);
 };
 
 const buildXlsxFromLines = async (lines: string[], outputPath: string) => {
@@ -1720,7 +1735,7 @@ const processJob = async (jobId: string) => {
     const nameBase = suffix ? `${input.baseName}-${suffix}` : input.baseName;
     const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
     const sourcePath =
-      inputExt === "heic" || inputExt === "heif"
+      inputExt === "heic" || inputExt === "heif" || inputExt === "avif"
         ? await prepareConvertedImage(input, "ocr", "jpg")
         : input.localPath;
     const outputBase = path.join(outputDir, sanitizeFileName(nameBase));
@@ -1733,7 +1748,7 @@ const processJob = async (jobId: string) => {
   ) => {
     const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
     const sourcePath =
-      inputExt === "heic" || inputExt === "heif"
+      inputExt === "heic" || inputExt === "heif" || inputExt === "avif"
         ? await prepareConvertedImage(input, "ocr", "jpg")
         : input.localPath;
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
@@ -1751,7 +1766,7 @@ const processJob = async (jobId: string) => {
   ) => {
     const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
     const sourcePath =
-      inputExt === "heic" || inputExt === "heif"
+      inputExt === "heic" || inputExt === "heif" || inputExt === "avif"
         ? await prepareConvertedImage(input, "ocr", "jpg")
         : input.localPath;
     const outputBase = path.join(outputDir, sanitizeFileName(input.baseName));
@@ -1861,22 +1876,21 @@ const processJob = async (jobId: string) => {
     await addOutput(translatedPath, buildOutputName(input.baseName, "txt"));
   };
 
-  const handlePdfToText = async (
+  const extractPdfTextContent = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
     await enforceDocumentPageLimit(input.localPath, input.filename);
 
-    const outputPath = path.join(
-      outputDir,
-      `${sanitizeFileName(input.baseName)}.txt`,
-    );
-
     let extractedText = "";
     let pdftotextError: unknown;
+    const extractPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}-extracted.txt`,
+    );
 
     try {
-      await runCommand("pdftotext", [input.localPath, outputPath]);
-      extractedText = await readFile(outputPath, "utf8");
+      await runCommand("pdftotext", [input.localPath, extractPath]);
+      extractedText = await readFile(extractPath, "utf8");
     } catch (error) {
       pdftotextError = error;
     }
@@ -1907,8 +1921,33 @@ const processJob = async (jobId: string) => {
       }
     }
 
+    return extractedText;
+  };
+
+  const handlePdfToText = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const extractedText = await extractPdfTextContent(input);
+
+    const outputPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}.txt`,
+    );
+
     await writeFile(outputPath, extractedText, "utf8");
     await addOutput(outputPath, buildOutputName(input.baseName, "txt"));
+  };
+
+  const handlePdfToDocx = async (
+    input: JobInput & { baseName: string; localPath: string },
+  ) => {
+    const extractedText = await extractPdfTextContent(input);
+    const outputPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}.docx`,
+    );
+    await buildDocxFromTextContent(extractedText, outputPath);
+    await addOutput(outputPath, buildOutputName(input.baseName, "docx"));
   };
 
   const handlePdfTables = async (
@@ -1952,6 +1991,54 @@ const processJob = async (jobId: string) => {
       `${sanitizeFileName(input.baseName)}-pages.zip`,
     );
     await zipFiles(zipPath, images);
+    await addOutput(zipPath, `${sanitizeFileName(input.baseName)}-pages.zip`);
+  };
+
+  const handlePdfToImageFormat = async (
+    input: JobInput & { baseName: string; localPath: string },
+    format: "jpeg" | "png" | "tiff" | "heic" | "heif" | "avif",
+  ) => {
+    await enforceDocumentPageLimit(input.localPath, input.filename);
+
+    const pageDir = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}-pages`,
+    );
+    await ensureDir(pageDir);
+    const images = await runPdfToImages(input.localPath, pageDir, "page");
+    if (images.length === 0) {
+      throw new Error("No pages rendered.");
+    }
+
+    const convertedPages = await Promise.all(
+      images.map(async (imagePath, pageIndex) => {
+        const outputPath = path.join(
+          pageDir,
+          `${sanitizeFileName(input.baseName)}-page-${pageIndex + 1}.${format}`,
+        );
+        if (format === "jpeg") {
+          await copyFile(imagePath, outputPath);
+          return outputPath;
+        }
+        await runImageConvert(imagePath, outputPath);
+        return outputPath;
+      }),
+    );
+
+    if (convertedPages.length === 1) {
+      const single = convertedPages[0];
+      if (!single) {
+        throw new Error("No pages rendered.");
+      }
+      await addOutput(single, `${sanitizeFileName(input.baseName)}.${format}`);
+      return;
+    }
+
+    const zipPath = path.join(
+      outputDir,
+      `${sanitizeFileName(input.baseName)}-pages.zip`,
+    );
+    await zipFiles(zipPath, convertedPages);
     await addOutput(zipPath, `${sanitizeFileName(input.baseName)}-pages.zip`);
   };
 
@@ -2088,7 +2175,7 @@ const processJob = async (jobId: string) => {
 
   const handleImageConvert = async (
     input: JobInput & { baseName: string; localPath: string },
-    format: "png" | "jpg" | "jpeg" | "heic" | "avif",
+    format: "png" | "jpg" | "jpeg" | "tiff" | "heic" | "heif" | "avif",
   ) => {
     const outputPath = path.join(
       outputDir,
@@ -2180,10 +2267,16 @@ const processJob = async (jobId: string) => {
     input: JobInput & { baseName: string; localPath: string },
   ) => {
     const inputExt = path.extname(input.localPath).slice(1).toLowerCase();
-    const sourcePath =
-      inputExt === "heic" || inputExt === "heif"
-        ? await prepareConvertedImage(input, "pdf", "jpg")
-        : input.localPath;
+    let sourcePath = input.localPath;
+
+    if (inputExt === "heic" || inputExt === "heif") {
+      sourcePath = await prepareConvertedImage(input, "pdf", "jpg");
+    } else if (inputExt === "svg") {
+      sourcePath = await rasterizeSvgInput(input);
+    } else if (inputExt !== "jpg" && inputExt !== "jpeg" && inputExt !== "png") {
+      sourcePath = await prepareConvertedImage(input, "pdf", "png");
+    }
+
     const outputPath = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}.pdf`,
@@ -2249,6 +2342,7 @@ const processJob = async (jobId: string) => {
           case "png-to-text":
           case "heic-to-text":
           case "heif-to-text":
+          case "avif-to-text":
           case "tiff-to-text":
             await handleOcrText(input);
             break;
@@ -2258,21 +2352,30 @@ const processJob = async (jobId: string) => {
           case "jpg-to-word":
           case "heic-to-word":
           case "heif-to-word":
+          case "avif-to-docx":
           case "png-to-document":
           case "tiff-to-word":
             await handleOcrDocx(input);
             break;
           case "jpg-to-excel":
           case "png-to-xlsx":
+          case "avif-to-xlsx":
+          case "heic-to-xlsx":
+          case "heif-to-xlsx":
+          case "tiff-to-xlsx":
             await handleOcrXlsx(input);
             break;
           case "pdf-to-text":
             await handlePdfToText(input);
             break;
+          case "pdf-to-docx":
+            await handlePdfToDocx(input);
+            break;
           case "pdf-to-csv":
             await handlePdfTables(input, "csv");
             break;
           case "pdf-to-excel":
+          case "pdf-to-xlsx":
             await handlePdfTables(input, "xlsx");
             break;
           case "word-to-pdf":
@@ -2289,6 +2392,24 @@ const processJob = async (jobId: string) => {
           }
           case "pdf-to-jpg":
             await handlePdfToJpg(input);
+            break;
+          case "pdf-to-jpeg":
+            await handlePdfToImageFormat(input, "jpeg");
+            break;
+          case "pdf-to-png":
+            await handlePdfToImageFormat(input, "png");
+            break;
+          case "pdf-to-tiff":
+            await handlePdfToImageFormat(input, "tiff");
+            break;
+          case "pdf-to-heic":
+            await handlePdfToImageFormat(input, "heic");
+            break;
+          case "pdf-to-heif":
+            await handlePdfToImageFormat(input, "heif");
+            break;
+          case "pdf-to-avif":
+            await handlePdfToImageFormat(input, "avif");
             break;
           case "split-pdf":
             await handlePdfSplit(input);
@@ -2347,6 +2468,10 @@ const processJob = async (jobId: string) => {
           case "heif-to-pdf":
           case "tiff-to-pdf":
           case "jpg-to-pdf":
+          case "png-to-pdf":
+          case "avif-to-pdf":
+          case "webp-to-pdf":
+          case "svg-to-pdf":
             await handleImageToPdf(input);
             break;
           case "qr-code-scanner":
