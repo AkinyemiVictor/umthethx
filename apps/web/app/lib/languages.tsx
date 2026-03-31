@@ -75,10 +75,10 @@ export const defaultLanguage: Language = {
 
 export const languages: Language[] = [
   defaultLanguage,
-  { code: "fr", label: "French", flag: <FlagFr /> },
-  { code: "es", label: "Spanish", flag: <FlagEs /> },
-  { code: "de", label: "German", flag: <FlagDe /> },
-  { code: "pt", label: "Portuguese", flag: <FlagPt /> },
+  { code: "fr", label: "Français", flag: <FlagFr /> },
+  { code: "es", label: "Español", flag: <FlagEs /> },
+  { code: "de", label: "Deutsch", flag: <FlagDe /> },
+  { code: "pt", label: "Português", flag: <FlagPt /> },
   { code: "af", label: "Afrikaans", flag: <FlagZa /> },
-  { code: "ar", label: "Arabic", flag: <FlagAr /> },
+  { code: "ar", label: "العربية", flag: <FlagAr /> },
 ];

@@ -12,6 +12,7 @@ export function LanguageMenu() {
     () => languages.find((item) => item.code === lang) ?? defaultLanguage,
     [lang],
   );
+  const getLanguageDir = (code: string) => (code === "ar" ? "rtl" : "ltr");
 
   return (
     <div className="relative mt-3">
@@ -30,7 +31,11 @@ export function LanguageMenu() {
         onClick={() => setOpen((prev) => !prev)}
         className="relative z-20 flex w-full items-center justify-between gap-3 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]"
       >
-        <span className="flex items-center gap-2">
+        <span
+          className="flex items-center gap-2"
+          lang={currentLanguage.code}
+          dir={getLanguageDir(currentLanguage.code)}
+        >
           <span className="rounded-sm border border-black/10">
             {currentLanguage.flag}
           </span>
@@ -83,7 +88,13 @@ export function LanguageMenu() {
                 <span className="rounded-sm border border-black/10">
                   {language.flag}
                 </span>
-                <span className="truncate">{language.label}</span>
+                <span
+                  className="truncate"
+                  lang={language.code}
+                  dir={getLanguageDir(language.code)}
+                >
+                  {language.label}
+                </span>
               </button>
             </li>
           ))}

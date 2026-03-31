@@ -97,10 +97,10 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
             {t("footer.tagline")}
           </p>
           <a
-            href="mailto:support@umthethx.com"
+            href="mailto:contactumthethx@gmail.com"
             className="text-sm font-semibold text-zinc-700 hover:text-zinc-900 dark:text-[var(--muted)] dark:hover:text-[var(--foreground)]"
           >
-            support@umthethx.com
+            contactumthethx@gmail.com
           </a>
           <div className="flex items-center gap-3">
             {socialLinks.map((link) => (

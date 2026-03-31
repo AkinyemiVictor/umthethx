@@ -14,7 +14,7 @@ export default function ContactPage() {
     >
       <section>
         <p>
-          Email: <span className="font-semibold">support@umthethx.com</span>
+          Email: <span className="font-semibold">contactumthethx@gmail.com</span>
         </p>
         <p className="mt-2">Response time: 24–72 hours (business days)</p>
       </section>

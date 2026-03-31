@@ -142,7 +142,7 @@ export default function TermsPage() {
         <p className="mt-2">
           For questions or concerns, contact us at:
           <br />
-          Email: support@umthethx.com
+          Email: contactumthethx@gmail.com
         </p>
       </section>
     </LegalPageShell>

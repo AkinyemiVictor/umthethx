@@ -115,7 +115,7 @@ export default function PrivacyPage() {
         <p className="mt-2">
           Questions about privacy?
           <br />
-          Email: support@umthethx.com
+          Email: contactumthethx@gmail.com
         </p>
       </section>
     </LegalPageShell>
