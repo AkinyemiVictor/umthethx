@@ -86,19 +86,14 @@ const formatBytes = (size: number) => {
   return `${mb.toFixed(1)} MB`;
 };
 
-const formatDurationCompact = (seconds: number) => {
-  if (seconds <= 0) return "0s";
+const formatDurationClock = (seconds: number) => {
+  if (seconds <= 0) return "00:00:00";
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const remainingSeconds = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m`;
-  }
-  return `${remainingSeconds}s`;
+  return [hours, minutes, remainingSeconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
 };
 
 const formatWindowLabel = (seconds: number) => {
@@ -338,7 +333,9 @@ export function ConverterWorkflow({
   const usageDataLimit = formatBytes(usageStatus?.bytes?.limit ?? 100 * 1024 * 1024);
   const usageMonitorDetail = usageStatus
     ? isUsageBlocked
-      ? usageStatus.message
+      ? t("workflow.usageBlocked", {
+          time: formatDurationClock(blockedResetSeconds),
+        })
       : [
           t("workflow.usageRemaining", {
             remaining: usageStatus.count.remaining,
@@ -349,7 +346,7 @@ export function ConverterWorkflow({
           }),
           countResetSeconds > 0
             ? t("workflow.usageResets", {
-                time: formatDurationCompact(countResetSeconds),
+                time: formatDurationClock(countResetSeconds),
               })
             : "",
         ]

@@ -290,6 +290,7 @@ export const translations = {
     "workflow.usageRemaining": "{remaining} left in this window.",
     "workflow.usageInfo":
       "Free use refreshes every {window} and includes up to {size} of total file data.",
+    "workflow.usageBlocked": "Free conversion limit reached. Convert again in {time}.",
     "workflow.usageResets": "Resets in {time}.",
     "workflow.usageLoading": "Checking usage...",
     "theme.toggleLabel": "Toggle color mode",

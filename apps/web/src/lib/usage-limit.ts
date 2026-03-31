@@ -5,7 +5,6 @@ export type UsageScope = "converter" | "ai-notemaker";
 
 type UsagePolicy = {
   label: string;
-  itemLabel: string;
   limit: number;
   ipLimit: number;
   windowSeconds: number;
@@ -69,7 +68,6 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
 const usagePolicies: Record<UsageScope, UsagePolicy> = {
   converter: {
     label: "converter",
-    itemLabel: "conversions",
     limit: parsePositiveInteger(
       process.env.CONVERTER_USAGE_LIMIT?.trim(),
       DEFAULT_CONVERTER_LIMIT,
@@ -97,7 +95,6 @@ const usagePolicies: Record<UsageScope, UsagePolicy> = {
   },
   "ai-notemaker": {
     label: "NoteMaker",
-    itemLabel: "NoteMaker tasks",
     limit: parsePositiveInteger(
       process.env.AI_NOTEMAKER_USAGE_LIMIT?.trim(),
       DEFAULT_AI_NOTEMAKER_LIMIT,
@@ -141,52 +138,17 @@ const getClientIp = (request: Request) => {
 const normalizeIpForKey = (value: string | null) =>
   value ? value.replace(/[^a-z0-9:.\-]/gi, "-").slice(0, 80) : null;
 
-const formatRetryAfter = (retryAfterSeconds: number) => {
-  if (retryAfterSeconds <= 60) {
-    return `${retryAfterSeconds} seconds`;
-  }
-  if (retryAfterSeconds < 3600) {
-    const minutes = Math.ceil(retryAfterSeconds / 60);
-    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
-  }
-  const hours = Math.ceil(retryAfterSeconds / 3600);
-  return `${hours} hour${hours === 1 ? "" : "s"}`;
-};
-
-const formatBytes = (bytes: number) => {
-  if (bytes < 1024 * 1024) {
-    return `${Math.ceil(bytes / 1024)} KB`;
-  }
-  const megabytes = bytes / (1024 * 1024);
-  if (Number.isInteger(megabytes)) {
-    return `${megabytes} MB`;
-  }
-  return `${megabytes.toFixed(1)} MB`;
-};
-
 const getCountLimitMessage = (
-  entry: UsageTrackedKey,
   policy: UsagePolicy,
-  retryAfterSeconds: number,
 ) =>
-  `You've reached the free ${policy.label} allowance for now. This ${entry.subjectLabel} has already used ${entry.limit} ${policy.itemLabel} in the last ${formatRetryAfter(
-    policy.windowSeconds,
-  )}. Please come back in about ${formatRetryAfter(
-    retryAfterSeconds,
-  )} and try again.`;
+  `Free ${policy.label} limit reached for now.`;
 
 const getByteLimitMessage = (
-  entry: UsageTrackedKey,
-  policy: UsagePolicy,
-  retryAfterSeconds: number,
+  _entry: UsageTrackedKey,
+  _policy: UsagePolicy,
+  _retryAfterSeconds: number,
 ) =>
-  `You've exhausted your free conversion allowance for now. This ${entry.subjectLabel} has already processed ${formatBytes(
-    entry.limit,
-  )} of files in the last ${formatRetryAfter(
-    policy.byteWindowSeconds ?? DEFAULT_CONVERTER_BYTE_WINDOW_SECONDS,
-  )}. Please come back in about ${formatRetryAfter(
-    retryAfterSeconds,
-  )} and try again.`;
+  "Free conversion limit reached for now.";
 
 const getTrackedKeys = (request: Request, scope: UsageScope) => {
   const policy = usagePolicies[scope];
@@ -348,11 +310,7 @@ export const getUsageStatus = async (
     retryAfterSeconds =
       countEntries[blockingCountIndex]?.retryAfterSeconds ??
       policy.windowSeconds;
-    message = getCountLimitMessage(
-      keys[blockingCountIndex] ?? primaryCountKey,
-      policy,
-      retryAfterSeconds,
-    );
+    message = getCountLimitMessage(policy);
   } else if (blockingBytesIndex >= 0 && byteTracked) {
     retryAfterSeconds =
       byteEntries[blockingBytesIndex]?.retryAfterSeconds ??
@@ -390,7 +348,7 @@ export const peekUsageLimit = async (
       return {
         allowed: false,
         retryAfterSeconds,
-        message: getCountLimitMessage(entry, policy, retryAfterSeconds),
+        message: getCountLimitMessage(policy),
       };
     }
   }
@@ -451,11 +409,7 @@ export const consumeUsageLimit = async (
       return {
         allowed: false,
         retryAfterSeconds: ttl > 0 ? ttl : policy.windowSeconds,
-        message: getCountLimitMessage(
-          entry,
-          policy,
-          ttl > 0 ? ttl : policy.windowSeconds,
-        ),
+        message: getCountLimitMessage(policy),
       };
     }
   }
