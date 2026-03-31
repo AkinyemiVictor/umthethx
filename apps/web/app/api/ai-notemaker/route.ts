@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PDFParse } from "pdf-parse";
 import JSZip from "jszip";
 import path from "path";
+import { consumeUsageLimit } from "../../../src/lib/usage-limit";
 
 let pdfWorkerConfigured = false;
 
@@ -1877,6 +1878,22 @@ export async function POST(request: Request) {
         { status: 415 },
       );
     }
+  }
+
+  const usage = await consumeUsageLimit(request, "ai-notemaker");
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error: usage.message,
+        retryAfterSeconds: usage.retryAfterSeconds,
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(usage.retryAfterSeconds),
+        },
+      },
+    );
   }
 
   const chunks: string[] = [];

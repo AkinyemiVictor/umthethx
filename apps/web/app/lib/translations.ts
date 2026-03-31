@@ -286,6 +286,12 @@ export const translations = {
     "workflow.conversionFailed": "Conversion failed.",
     "workflow.fetchStatusFailed": "Unable to fetch job status.",
     "workflow.removeFileAria": "Remove {filename}",
+    "workflow.usageLabel": "{used} / {limit} conversions used",
+    "workflow.usageRemaining": "{remaining} left in this window.",
+    "workflow.usageInfo":
+      "Free use refreshes every {window} and includes up to {size} of total file data.",
+    "workflow.usageResets": "Resets in {time}.",
+    "workflow.usageLoading": "Checking usage...",
     "theme.toggleLabel": "Toggle color mode",
     "theme.dark": "Dark",
     "theme.light": "Light",

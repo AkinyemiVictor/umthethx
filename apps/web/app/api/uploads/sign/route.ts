@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { converters } from "../../../../src/lib/converters";
 import { buildUploadKey, signPutObject } from "../../../../src/lib/s3";
+import { peekUsageLimit } from "../../../../src/lib/usage-limit";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,7 @@ type SignRequest = {
   contentType?: string;
   mime?: string;
   sizeBytes?: number;
+  batchSizeBytes?: number;
   jobId?: string;
 };
 
@@ -60,6 +62,7 @@ export async function POST(request: Request) {
     const filename = body.filename?.trim();
     const contentType = body.contentType?.trim() || body.mime?.trim();
     const sizeBytes = Number(body.sizeBytes);
+    const batchSizeBytes = Number(body.batchSizeBytes);
     const jobId = body.jobId?.trim() || randomUUID();
 
     if (!filename || !contentType) {
@@ -104,10 +107,42 @@ export async function POST(request: Request) {
       );
     }
 
+    if (Number.isFinite(batchSizeBytes) && batchSizeBytes <= 0) {
+      return NextResponse.json(
+        { error: "batchSizeBytes must be greater than 0." },
+        { status: 400 },
+      );
+    }
+
     if (!isMimeAllowed(contentType)) {
       return NextResponse.json(
         { error: "File type is not supported." },
         { status: 415 },
+      );
+    }
+
+    const bytesToCheck =
+      Number.isFinite(batchSizeBytes) && batchSizeBytes > 0
+        ? batchSizeBytes
+        : Number.isFinite(sizeBytes) && sizeBytes > 0
+          ? sizeBytes
+          : 0;
+
+    const usage = await peekUsageLimit(request, "converter", {
+      bytes: bytesToCheck,
+    });
+    if (!usage.allowed) {
+      return NextResponse.json(
+        {
+          error: usage.message,
+          retryAfterSeconds: usage.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(usage.retryAfterSeconds),
+          },
+        },
       );
     }
 

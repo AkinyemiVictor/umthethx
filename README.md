@@ -62,6 +62,15 @@ Web-only:
 - `OPENAI_API_KEY` for AI NoteMaker
 - `OPENAI_MODEL` optional override
 - `NEXT_PUBLIC_GA_MEASUREMENT_ID` optional analytics
+- `CONVERTER_USAGE_LIMIT` default `12` converter jobs per device per window
+- `CONVERTER_IP_USAGE_LIMIT` default `40` converter jobs per IP per window
+- `CONVERTER_USAGE_WINDOW_SECONDS` default `14400` (4 hours)
+- `CONVERTER_USAGE_BYTES_LIMIT` default `104857600` (100 MB) per device per window
+- `CONVERTER_IP_USAGE_BYTES_LIMIT` default `262144000` (250 MB) per IP per window
+- `CONVERTER_USAGE_BYTES_WINDOW_SECONDS` default `14400` (4 hours)
+- `AI_NOTEMAKER_USAGE_LIMIT` default `60` NoteMaker requests per device per window
+- `AI_NOTEMAKER_IP_USAGE_LIMIT` default `120` NoteMaker requests per IP per window
+- `AI_NOTEMAKER_USAGE_WINDOW_SECONDS` default `86400` (24 hours)
 
 Worker-only optional overrides:
 
@@ -106,6 +115,15 @@ Local-only binary overrides:
    - `OPENAI_API_KEY`
    - `OPENAI_MODEL` if you want to override the default
    - `NEXT_PUBLIC_GA_MEASUREMENT_ID` if analytics is enabled
+   - `CONVERTER_USAGE_LIMIT`
+   - `CONVERTER_IP_USAGE_LIMIT`
+   - `CONVERTER_USAGE_WINDOW_SECONDS`
+   - `CONVERTER_USAGE_BYTES_LIMIT`
+   - `CONVERTER_IP_USAGE_BYTES_LIMIT`
+   - `CONVERTER_USAGE_BYTES_WINDOW_SECONDS`
+   - `AI_NOTEMAKER_USAGE_LIMIT`
+   - `AI_NOTEMAKER_IP_USAGE_LIMIT`
+   - `AI_NOTEMAKER_USAGE_WINDOW_SECONDS`
 8. Set worker-only optional envs if needed:
    - `MAX_DOCUMENT_PAGES`
    - `HEAVY_WORKER_CONCURRENCY`
@@ -124,6 +142,9 @@ Important:
 - The BullMQ worker must stay awake as a persistent Railway service.
 - Disable Railway Serverless / App Sleeping for the worker service. Redis jobs do not count as inbound traffic that can wake a sleeping worker.
 - The worker now sends a Redis keepalive ping every 60 seconds by default so Railway sees regular outbound traffic after startup.
+- Converter and NoteMaker APIs now enforce Redis-backed per-device quotas with an IP fallback. The browser sends a local device ID with requests, and the server applies a cooldown when the limit is exceeded.
+- Converter pages now expose a small client-side usage monitor so people can see how many conversions remain in the current 4-hour window and when the allowance resets.
+- Converter requests now also enforce a rolling file-size budget. By default, one device can process up to 100 MB of converter uploads in 4 hours before it must wait for the cooldown to expire.
 - Conversion traffic is split into three BullMQ queues: heavy conversions, light conversions, and cleanup.
 - Heavy jobs include OCR, PDF, and office/document renders. Light jobs include simple image/data conversions such as format swaps and CSV to JSON.
 - Multiple Railway worker replicas are supported. With two replicas and `HEAVY_WORKER_CONCURRENCY=1`, the heavy queue can process two heavy jobs in parallel while light jobs continue independently.

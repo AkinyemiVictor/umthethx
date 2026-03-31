@@ -17,6 +17,10 @@ import {
   type NoteMakerMode,
 } from "../lib/ai-notemaker-types";
 import { useTranslations } from "./language-provider";
+import {
+  DEVICE_ID_HEADER,
+  getOrCreateDeviceId,
+} from "../../src/lib/device-id";
 
 type NotesResponse = {
   notes: string;
@@ -230,8 +234,14 @@ export function AiNoteMakerWorkspace() {
       uploads.forEach((item) => {
         formData.append("files", item.file);
       });
+      const deviceId = getOrCreateDeviceId();
       const response = await fetch("/api/ai-notemaker", {
         method: "POST",
+        headers: deviceId
+          ? {
+              [DEVICE_ID_HEADER]: deviceId,
+            }
+          : undefined,
         body: formData,
       });
       if (!response.ok) {

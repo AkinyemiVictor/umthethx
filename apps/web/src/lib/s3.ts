@@ -1,6 +1,7 @@
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -91,6 +92,21 @@ export const signGetObject = async (options: {
   });
   const downloadUrl = await getSignedUrl(getS3Client(), command, { expiresIn });
   return { downloadUrl, expiresIn };
+};
+
+export const getS3ObjectSize = async (options: { key: string }) => {
+  const response = await getS3Client().send(
+    new HeadObjectCommand({
+      Bucket: getS3Bucket(),
+      Key: options.key,
+    }),
+  );
+
+  const size = Number(response.ContentLength ?? 0);
+  if (!Number.isFinite(size) || size < 0) {
+    throw new Error("Unable to determine uploaded file size.");
+  }
+  return size;
 };
 
 export const deleteS3Prefix = async (options: { prefix: string }) => {

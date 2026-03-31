@@ -7,6 +7,8 @@ import {
   type JobInput,
 } from "../../../src/lib/job-store";
 import { getConvertQueueName, getQueue } from "../../../src/lib/queue";
+import { deleteS3Prefix, getS3ObjectSize } from "../../../src/lib/s3";
+import { consumeUsageLimit } from "../../../src/lib/usage-limit";
 
 export const runtime = "nodejs";
 
@@ -175,6 +177,37 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "jobId already exists." },
       { status: 409 },
+    );
+  }
+
+  const totalInputBytes = (
+    await Promise.all(
+      inputs.map((input) =>
+        getS3ObjectSize({
+          key: input.key.trim(),
+        }),
+      ),
+    )
+  ).reduce((sum, size) => sum + size, 0);
+
+  const usage = await consumeUsageLimit(request, "converter", {
+    bytes: totalInputBytes,
+  });
+  if (!usage.allowed) {
+    await deleteS3Prefix({ prefix: `temp/${jobId}/uploads/` }).catch(
+      () => undefined,
+    );
+    return NextResponse.json(
+      {
+        error: usage.message,
+        retryAfterSeconds: usage.retryAfterSeconds,
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(usage.retryAfterSeconds),
+        },
+      },
     );
   }
 

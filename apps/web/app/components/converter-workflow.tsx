@@ -12,6 +12,10 @@ import { useSearchParams } from "next/navigation";
 import { FileChip } from "@repo/ui/file-chip";
 import type { Converter } from "../lib/converters";
 import { useTranslations } from "./language-provider";
+import {
+  DEVICE_ID_HEADER,
+  getOrCreateDeviceId,
+} from "../../src/lib/device-id";
 
 type WorkflowStatus = "queued" | "running" | "success" | "error";
 type ApiJobStatus = "queued" | "processing" | "completed" | "failed";
@@ -33,6 +37,25 @@ type JobSummary = {
 type JobOutput = {
   filename: string;
   downloadUrl?: string | null;
+};
+
+type UsageStatusEntry = {
+  used: number;
+  limit: number;
+  remaining: number;
+  windowSeconds: number;
+  retryAfterSeconds: number;
+  blocked: boolean;
+  subjectLabel: string;
+};
+
+type ConverterUsageStatus = {
+  blocked: boolean;
+  retryAfterSeconds: number;
+  message: string;
+  count: UsageStatusEntry;
+  bytes?: UsageStatusEntry;
+  fetchedAtMs: number;
 };
 
 type ConverterWorkflowProps = {
@@ -61,6 +84,59 @@ const formatBytes = (size: number) => {
   if (kb < 1024) return `${kb.toFixed(1)} KB`;
   const mb = kb / 1024;
   return `${mb.toFixed(1)} MB`;
+};
+
+const formatDurationCompact = (seconds: number) => {
+  if (seconds <= 0) return "0s";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m`;
+  }
+  return `${remainingSeconds}s`;
+};
+
+const formatWindowLabel = (seconds: number) => {
+  if (seconds % 3600 === 0) {
+    const hours = seconds / 3600;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  if (seconds % 60 === 0) {
+    const minutes = seconds / 60;
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  return `${seconds} seconds`;
+};
+
+const getEntryRemainingSeconds = (
+  entry: UsageStatusEntry | undefined,
+  fetchedAtMs: number | undefined,
+  nowMs: number,
+) => {
+  if (!entry || !fetchedAtMs || entry.retryAfterSeconds <= 0) {
+    return 0;
+  }
+
+  const elapsedSeconds = Math.floor((nowMs - fetchedAtMs) / 1000);
+  return Math.max(entry.retryAfterSeconds - elapsedSeconds, 0);
+};
+
+const getRemainingSecondsFromTimer = (
+  retryAfterSeconds: number,
+  fetchedAtMs: number | undefined,
+  nowMs: number,
+) => {
+  if (!fetchedAtMs || retryAfterSeconds <= 0) {
+    return 0;
+  }
+
+  const elapsedSeconds = Math.floor((nowMs - fetchedAtMs) / 1000);
+  return Math.max(retryAfterSeconds - elapsedSeconds, 0);
 };
 
 const mimeByExtension: Record<string, string> = {
@@ -146,8 +222,40 @@ export function ConverterWorkflow({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const [usageStatus, setUsageStatus] = useState<ConverterUsageStatus | null>(
+    null,
+  );
+  const [isUsageLoading, setIsUsageLoading] = useState(true);
+  const [usageNowMs, setUsageNowMs] = useState(() => Date.now());
   const searchParams = useSearchParams();
   const initialJobId = searchParams?.get("jobId");
+
+  const loadUsageStatus = async () => {
+    const deviceId = getOrCreateDeviceId();
+    try {
+      setIsUsageLoading(true);
+      const res = await fetch("/api/usage/converter", {
+        headers: deviceId ? { [DEVICE_ID_HEADER]: deviceId } : undefined,
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to fetch usage status.");
+      }
+
+      const payload = (await res.json()) as Omit<
+        ConverterUsageStatus,
+        "fetchedAtMs"
+      >;
+      setUsageStatus({
+        ...payload,
+        fetchedAtMs: Date.now(),
+      });
+    } catch {
+      // Best effort only. The converter UI still works without the usage monitor.
+    } finally {
+      setIsUsageLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
@@ -164,6 +272,37 @@ export function ConverterWorkflow({
     return () => query.removeListener(update);
   }, []);
 
+  useEffect(() => {
+    void loadUsageStatus();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadUsageStatus();
+      }
+    };
+    const handleFocus = () => {
+      void loadUsageStatus();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setUsageNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const resetJobState = () => {
     setStatus(null);
     setJobId(null);
@@ -176,6 +315,76 @@ export function ConverterWorkflow({
     setJob(null);
     setError(null);
   };
+
+  const countResetSeconds = getEntryRemainingSeconds(
+    usageStatus?.count,
+    usageStatus?.fetchedAtMs,
+    usageNowMs,
+  );
+  const bytesResetSeconds = getEntryRemainingSeconds(
+    usageStatus?.bytes,
+    usageStatus?.fetchedAtMs,
+    usageNowMs,
+  );
+  const blockedResetSeconds = getRemainingSecondsFromTimer(
+    usageStatus?.retryAfterSeconds ?? 0,
+    usageStatus?.fetchedAtMs,
+    usageNowMs,
+  );
+  const isUsageBlocked = Boolean(usageStatus?.blocked && blockedResetSeconds > 0);
+  const usageWindowLabel = usageStatus
+    ? formatWindowLabel(usageStatus.count.windowSeconds)
+    : formatWindowLabel(4 * 60 * 60);
+  const usageDataLimit = formatBytes(usageStatus?.bytes?.limit ?? 100 * 1024 * 1024);
+  const usageMonitorDetail = usageStatus
+    ? isUsageBlocked
+      ? usageStatus.message
+      : [
+          t("workflow.usageRemaining", {
+            remaining: usageStatus.count.remaining,
+          }),
+          t("workflow.usageInfo", {
+            window: usageWindowLabel,
+            size: usageDataLimit,
+          }),
+          countResetSeconds > 0
+            ? t("workflow.usageResets", {
+                time: formatDurationCompact(countResetSeconds),
+              })
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+    : isUsageLoading
+      ? ""
+      : t("workflow.usageInfo", {
+          window: usageWindowLabel,
+          size: usageDataLimit,
+        });
+
+  useEffect(() => {
+    if (!usageStatus) {
+      return;
+    }
+
+    const pendingResets = [
+      usageStatus.retryAfterSeconds,
+      usageStatus.count.retryAfterSeconds,
+      usageStatus.bytes?.retryAfterSeconds ?? 0,
+    ].filter((value) => value > 0);
+    if (pendingResets.length === 0) {
+      return;
+    }
+
+    const nextRefreshMs = Math.min(...pendingResets) * 1000 + 1000;
+    const timeout = window.setTimeout(() => {
+      void loadUsageStatus();
+    }, nextRefreshMs);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [usageStatus?.fetchedAtMs]);
 
   const requestCleanup = (
     targetJobId: string,
@@ -285,6 +494,10 @@ export function ConverterWorkflow({
       setError(t("workflow.selectFile"));
       return;
     }
+    if (isUsageBlocked && usageStatus?.message) {
+      setError(usageStatus.message);
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     setOutputs([]);
@@ -298,6 +511,14 @@ export function ConverterWorkflow({
       contentType: string;
     }> = [];
     let activeJobId: string | null = null;
+    const deviceId = getOrCreateDeviceId();
+    const deviceHeaders: Record<string, string> = deviceId
+      ? { [DEVICE_ID_HEADER]: deviceId }
+      : {};
+    const plannedBatchBytes = uploads.reduce(
+      (sum, item) => sum + item.file.size,
+      0,
+    );
 
     try {
       for (const item of uploads) {
@@ -309,11 +530,15 @@ export function ConverterWorkflow({
           "/api/uploads/sign",
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...deviceHeaders,
+            },
             body: JSON.stringify({
               filename: file.name,
               contentType,
               sizeBytes: file.size,
+              batchSizeBytes: plannedBatchBytes,
               jobId: activeJobId,
             }),
           },
@@ -365,7 +590,10 @@ export function ConverterWorkflow({
         "/api/jobs",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...deviceHeaders,
+          },
           body: JSON.stringify({
             converterSlug: converter.slug,
             jobId: activeJobId,
@@ -402,6 +630,7 @@ export function ConverterWorkflow({
       );
     } finally {
       setIsSubmitting(false);
+      void loadUsageStatus();
     }
   };
 
@@ -794,6 +1023,27 @@ export function ConverterWorkflow({
               </ul>
             )}
           </div>
+          <div
+            aria-live="polite"
+            className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-[11px] text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
+          >
+            <div className="font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+              {usageStatus
+                ? t("workflow.usageLabel", {
+                    used: usageStatus.count.used,
+                    limit: usageStatus.count.limit,
+                  })
+                : isUsageLoading
+                  ? t("workflow.usageLoading")
+                  : t("workflow.usageLabel", {
+                      used: 0,
+                      limit: 12,
+                    })}
+            </div>
+            {usageMonitorDetail ? (
+              <p className="mt-1 leading-relaxed">{usageMonitorDetail}</p>
+            ) : null}
+          </div>
           {error && (
             <p className="mt-3 text-xs text-red-600 dark:text-red-400">
               {error}
@@ -811,7 +1061,12 @@ export function ConverterWorkflow({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isBusy || uploads.length === 0 || status === "success"}
+              disabled={
+                isBusy ||
+                uploads.length === 0 ||
+                status === "success" ||
+                isUsageBlocked
+              }
               className="inline-flex items-center justify-center rounded-full bg-[var(--brand-500)] px-5 py-2 text-sm font-semibold text-[var(--brand-on)] shadow-sm shadow-black/20 transition hover:bg-[var(--brand-600)] active:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:shadow-black/40 dark:focus-visible:ring-offset-[var(--background)]"
             >
               {status === "success"
