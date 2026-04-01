@@ -3,6 +3,7 @@
 import Image from "next/image";
 import type { Converter } from "../lib/converters";
 import { type TranslationKey } from "../lib/translations";
+import { GoogleTranslateWidget } from "./google-translate-widget";
 import { LanguageMenu } from "./language-menu";
 import { useTranslations } from "./language-provider";
 
@@ -153,6 +154,7 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
             {t("footer.languageDescription")}
           </p>
           <LanguageMenu />
+          <GoogleTranslateWidget />
         </div>
       </div>
 

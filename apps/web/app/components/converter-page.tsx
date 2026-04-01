@@ -91,7 +91,7 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
   ];
 
   return (
-    <div className="relative min-h-[100dvh] bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
+    <div className="relative min-h-[100svh] bg-white text-zinc-900 dark:bg-[var(--background)] dark:text-[var(--foreground)]">
       {structuredData.map((data, index) => (
         <script
           // eslint-disable-next-line react/no-danger

@@ -86,6 +86,8 @@ const formatBytes = (size: number) => {
   return `${mb.toFixed(1)} MB`;
 };
 
+const formatUsageBytes = (size: number) => formatBytes(size).replace(".0 ", " ");
+
 const formatDurationClock = (seconds: number) => {
   if (seconds <= 0) return "00:00:00";
   const hours = Math.floor(seconds / 3600);
@@ -330,31 +332,23 @@ export function ConverterWorkflow({
   const usageWindowLabel = usageStatus
     ? formatWindowLabel(usageStatus.count.windowSeconds)
     : formatWindowLabel(4 * 60 * 60);
-  const usageDataLimit = formatBytes(usageStatus?.bytes?.limit ?? 100 * 1024 * 1024);
+  const usageDataLimit = formatUsageBytes(
+    usageStatus?.bytes?.limit ?? 100 * 1024 * 1024,
+  );
   const usageMonitorDetail = usageStatus
     ? isUsageBlocked
       ? t("workflow.usageBlocked", {
           time: formatDurationClock(blockedResetSeconds),
         })
-      : [
-          t("workflow.usageRemaining", {
-            remaining: usageStatus.count.remaining,
-          }),
-          t("workflow.usageInfo", {
-            window: usageWindowLabel,
-            size: usageDataLimit,
-          }),
-          countResetSeconds > 0
-            ? t("workflow.usageResets", {
-                time: formatDurationClock(countResetSeconds),
-              })
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" ")
+      : t("workflow.usageInfo", {
+          limit: usageStatus.count.limit,
+          window: usageWindowLabel,
+          size: usageDataLimit,
+        })
     : isUsageLoading
       ? ""
       : t("workflow.usageInfo", {
+          limit: 12,
           window: usageWindowLabel,
           size: usageDataLimit,
         });
@@ -536,6 +530,7 @@ export function ConverterWorkflow({
               contentType,
               sizeBytes: file.size,
               batchSizeBytes: plannedBatchBytes,
+              batchCount: uploads.length,
               jobId: activeJobId,
             }),
           },
@@ -992,7 +987,7 @@ export function ConverterWorkflow({
                   return (
                     <li
                       key={item.id}
-                      className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]"
                     >
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-zinc-900 dark:text-[var(--foreground)]">
@@ -1010,7 +1005,7 @@ export function ConverterWorkflow({
                           filename: file.name,
                         })}
                         disabled={isBusy}
-                        className="ml-3 inline-grid h-6 w-6 shrink-0 place-items-center rounded-full border border-zinc-200 text-[11px] font-semibold leading-none text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
+                        className="ml-3 inline-grid h-6 w-6 shrink-0 self-center place-items-center rounded-full border border-zinc-200 text-[11px] font-semibold leading-none text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[var(--border-2)] dark:text-[var(--muted-2)] dark:hover:border-[var(--border-1)] dark:hover:text-[var(--foreground)]"
                       >
                         X
                       </button>

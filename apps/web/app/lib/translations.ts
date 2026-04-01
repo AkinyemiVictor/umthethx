@@ -37,6 +37,9 @@ export const translations = {
     "footer.language": "Language",
     "footer.languageDescription":
       "Change the display language for the entire experience.",
+    "footer.translateWithGoogle": "Translate with Google",
+    "footer.translateWithGoogleDescription":
+      "Open this page in Google Translate for more languages.",
     "footer.switchLanguageTo": "Switch language to {language}",
     "footer.terms": "Terms & Conditions",
     "footer.privacy": "Privacy Policy",
@@ -289,7 +292,7 @@ export const translations = {
     "workflow.usageLabel": "{used} / {limit} conversions used",
     "workflow.usageRemaining": "{remaining} left in this window.",
     "workflow.usageInfo":
-      "Free use refreshes every {window} and includes up to {size} of total file data.",
+      "You have {limit} conversions in this period. Limit resets every {window} (max {size} total).",
     "workflow.usageBlocked": "Free conversion limit reached. Convert again in {time}.",
     "workflow.usageResets": "Resets in {time}.",
     "workflow.usageLoading": "Checking usage...",

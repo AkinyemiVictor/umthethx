@@ -12,6 +12,7 @@ type SignRequest = {
   mime?: string;
   sizeBytes?: number;
   batchSizeBytes?: number;
+  batchCount?: number;
   jobId?: string;
 };
 
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
     const contentType = body.contentType?.trim() || body.mime?.trim();
     const sizeBytes = Number(body.sizeBytes);
     const batchSizeBytes = Number(body.batchSizeBytes);
+    const batchCount = Number(body.batchCount);
     const jobId = body.jobId?.trim() || randomUUID();
 
     if (!filename || !contentType) {
@@ -114,6 +116,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (Number.isFinite(batchCount) && batchCount <= 0) {
+      return NextResponse.json(
+        { error: "batchCount must be greater than 0." },
+        { status: 400 },
+      );
+    }
+
     if (!isMimeAllowed(contentType)) {
       return NextResponse.json(
         { error: "File type is not supported." },
@@ -130,6 +139,8 @@ export async function POST(request: Request) {
 
     const usage = await peekUsageLimit(request, "converter", {
       bytes: bytesToCheck,
+      units:
+        Number.isFinite(batchCount) && batchCount > 0 ? batchCount : 1,
     });
     if (!usage.allowed) {
       return NextResponse.json(

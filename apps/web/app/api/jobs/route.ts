@@ -192,6 +192,7 @@ export async function POST(request: Request) {
 
   const usage = await consumeUsageLimit(request, "converter", {
     bytes: totalInputBytes,
+    units: inputs.length,
   });
   if (!usage.allowed) {
     await deleteS3Prefix({ prefix: `temp/${jobId}/uploads/` }).catch(

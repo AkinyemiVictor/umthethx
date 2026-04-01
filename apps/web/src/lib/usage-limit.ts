@@ -45,6 +45,7 @@ type UsageTrackedKey = {
 
 type UsageCheckOptions = {
   bytes?: number;
+  units?: number;
 };
 
 const DEFAULT_CONVERTER_LIMIT = 12;
@@ -339,11 +340,18 @@ export const peekUsageLimit = async (
 ): Promise<UsageCheckResult> => {
   const redis = getUsageRedis();
   const { keys, policy } = getTrackedKeys(request, scope);
+  const requestedUnits =
+    Number.isFinite(options.units) && (options.units ?? 0) > 0
+      ? Math.floor(options.units ?? 1)
+      : 1;
 
   for (const entry of keys) {
     const raw = await redis.get(entry.key);
     const count = Number.parseInt(raw ?? "0", 10);
-    if (Number.isInteger(count) && count >= entry.limit) {
+    if (
+      Number.isInteger(count) &&
+      count + requestedUnits > entry.limit
+    ) {
       const retryAfterSeconds = await getRetryAfter(entry.key, policy.windowSeconds);
       return {
         allowed: false,
@@ -396,11 +404,15 @@ export const consumeUsageLimit = async (
 ): Promise<UsageCheckResult> => {
   const redis = getUsageRedis();
   const { keys, policy } = getTrackedKeys(request, scope);
+  const requestedUnits =
+    Number.isFinite(options.units) && (options.units ?? 0) > 0
+      ? Math.floor(options.units ?? 1)
+      : 1;
 
   for (const entry of keys) {
-    const count = await redis.incr(entry.key);
+    const count = await redis.incrby(entry.key, requestedUnits);
     let ttl = await redis.ttl(entry.key);
-    if (count === 1 || ttl < 0) {
+    if (count === requestedUnits || ttl < 0) {
       await redis.expire(entry.key, policy.windowSeconds);
       ttl = policy.windowSeconds;
     }
@@ -435,7 +447,9 @@ export const consumeUsageLimit = async (
 
         if (nextBytes > entry.limit) {
           for (const countEntry of keys) {
-            await redis.decr(countEntry.key).catch(() => undefined);
+            await redis
+              .decrby(countEntry.key, requestedUnits)
+              .catch(() => undefined);
           }
           for (const byteKey of incrementedByteKeys) {
             await redis.decrby(byteKey, options.bytes).catch(() => undefined);
