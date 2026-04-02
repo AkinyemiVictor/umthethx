@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 import { FileChip } from "@repo/ui/file-chip";
 import type { Converter } from "../lib/converters";
 import { ConverterCategoryIcon } from "./converter-category-icon";
+import { GoogleTranslateWidget } from "./google-translate-widget";
 import { ThemeToggle } from "./theme-toggle";
 import { useTranslations } from "./language-provider";
 import {
@@ -166,6 +167,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           <span className="sr-only">Umthethx</span>
         </Link>
         <div className="flex items-center gap-2 sm:gap-6">
+          <GoogleTranslateWidget />
           <ThemeToggle />
           <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[740px]:flex min-[740px]:gap-6 min-[740px]:text-sm">
             <div className="inline-flex overflow-hidden rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">

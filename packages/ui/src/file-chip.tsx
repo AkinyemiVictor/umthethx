@@ -20,7 +20,9 @@ export function FileChip({
     <span
       role="img"
       aria-label={ariaLabel}
+      translate="no"
       className={[
+        "notranslate",
         "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold",
         t.chipBg,
         t.chipText,

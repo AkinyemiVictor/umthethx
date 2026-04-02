@@ -97,28 +97,6 @@ html.dark {
   }
 }
 
-.google-translate-shell .goog-te-gadget {
-  display: block !important;
-  color: inherit !important;
-  font-family: inherit !important;
-  font-size: 0.875rem !important;
-  line-height: 1.25rem !important;
-}
-
-.google-translate-shell .goog-te-combo {
-  width: 100%;
-  min-height: 38px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  outline: none;
-}
-
-.google-translate-shell .goog-te-banner-frame.skiptranslate {
-  display: none !important;
-}
-
 body {
   top: 0 !important;
 }

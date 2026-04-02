@@ -3,8 +3,6 @@
 import Image from "next/image";
 import type { Converter } from "../lib/converters";
 import { type TranslationKey } from "../lib/translations";
-import { GoogleTranslateWidget } from "./google-translate-widget";
-import { LanguageMenu } from "./language-menu";
 import { useTranslations } from "./language-provider";
 
 type SiteFooterProps = {
@@ -16,6 +14,14 @@ const quickLinks: Array<{ key: TranslationKey; href: string }> = [
   { key: "footer.privacy", href: "/privacy" },
   { key: "footer.refunds", href: "/refunds" },
   { key: "footer.contact", href: "/contact" },
+];
+
+const footerNoteMakerTypes: TranslationKey[] = [
+  "aiNoteMaker.typeSmart",
+  "aiNoteMaker.typeAcademic",
+  "aiNoteMaker.typeMedical",
+  "aiNoteMaker.typeLegal",
+  "aiNoteMaker.typeBusiness",
 ];
 
 const socialLinks = [
@@ -130,6 +136,17 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
 
         <div>
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
+            {t("header.noteMakerTypes")}
+          </h3>
+          <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
+            {footerNoteMakerTypes.map((typeKey) => (
+              <li key={typeKey}>{t(typeKey)}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
             {t("footer.quickLinks")}
           </h3>
           <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
@@ -144,17 +161,6 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
               </li>
             ))}
           </ul>
-        </div>
-
-        <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-[var(--foreground)]">
-            {t("footer.language")}
-          </h3>
-          <p className="mt-3 text-sm text-zinc-600 dark:text-[var(--muted)]">
-            {t("footer.languageDescription")}
-          </p>
-          <LanguageMenu />
-          <GoogleTranslateWidget />
         </div>
       </div>
 
