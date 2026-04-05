@@ -1,4 +1,5 @@
 import { notFound, permanentRedirect } from "next/navigation";
+import { getCurrentMarket, prefixMarketPath } from "../../lib/markets";
 
 type PageProps = {
   params: Promise<{
@@ -14,5 +15,8 @@ export default async function ConverterSlugPage({ params }: PageProps) {
   if (!slug) {
     notFound();
   }
-  permanentRedirect(`/convert/${encodeURIComponent(slug)}`);
+  const market = await getCurrentMarket();
+  permanentRedirect(
+    prefixMarketPath(`/convert/${encodeURIComponent(slug)}`, market),
+  );
 }

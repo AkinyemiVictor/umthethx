@@ -1,16 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   noteMakerGroups,
   normalizeMode,
   type NoteMakerMode,
 } from "../lib/ai-notemaker-types";
+import { getPathMarket, prefixMarketPath } from "../../src/lib/markets";
 import { useTranslations } from "./language-provider";
 import { NoteMakerCategoryIcon } from "./note-maker-category-icon";
 
-const buildNoteMakerHref = (mode: NoteMakerMode, subtype?: string) => {
+const buildNoteMakerHref = (
+  mode: NoteMakerMode,
+  market: ReturnType<typeof getPathMarket>,
+  subtype?: string,
+) => {
   const params = new URLSearchParams();
   if (mode && mode !== "general") {
     params.set("mode", mode);
@@ -19,11 +24,13 @@ const buildNoteMakerHref = (mode: NoteMakerMode, subtype?: string) => {
     params.set("subtype", subtype);
   }
   const query = params.toString();
-  return query ? `/ai-notemaker?${query}` : "/ai-notemaker";
+  return prefixMarketPath(query ? `/ai-notemaker?${query}` : "/ai-notemaker", market);
 };
 
 export function AiNoteMakerTypeGrid() {
   const t = useTranslations();
+  const pathname = usePathname();
+  const market = getPathMarket(pathname);
   const searchParams = useSearchParams();
   const currentMode = normalizeMode(searchParams?.get("mode"));
   const currentSubtype = searchParams?.get("subtype") ?? "";
@@ -76,7 +83,7 @@ export function AiNoteMakerTypeGrid() {
                 return (
                   <Link
                     key={`${item.mode}-${item.subtype ?? "base"}`}
-                    href={buildNoteMakerHref(item.mode, item.subtype)}
+                    href={buildNoteMakerHref(item.mode, market, item.subtype)}
                     aria-current={isActive ? "page" : undefined}
                     className={[
                       "rounded-xl border p-3 transition",

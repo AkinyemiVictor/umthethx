@@ -5,6 +5,7 @@ import "./globals.css";
 import { LanguageProvider } from "./components/language-provider";
 import { PageAds } from "./components/page-ads";
 import { getCurrentLanguage } from "./lib/i18n";
+import { getCurrentMarket } from "./lib/markets";
 import { defaultMetadata } from "./lib/seo";
 import { getMessages, getTranslator } from "./lib/translations";
 
@@ -39,12 +40,16 @@ export default async function RootLayout({
   const shouldEnableAnalytics =
     process.env.NODE_ENV === "production" && Boolean(gaMeasurementId);
   const lang = await getCurrentLanguage();
+  const market = await getCurrentMarket();
   const messages = getMessages(lang);
   const t = getTranslator(lang);
 
   return (
-    <html lang={lang}>
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang={lang} data-market={market}>
+      <body
+        data-market={market}
+        className={`${geistSans.variable} ${geistMono.variable}`}
+      >
         {shouldEnableAnalytics ? (
           <>
             <Script

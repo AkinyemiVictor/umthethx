@@ -1,3 +1,5 @@
+import { prefixMarketPath, type MarketCode } from "./markets";
+
 export type ConverterJobType = "ocr" | "extract" | "convert";
 
 export type ConverterAccept = {
@@ -1015,10 +1017,13 @@ export const getConverterCategoryGroups = (
   return groups;
 };
 
-export const getConverterHref = (converter: Converter) =>
+export const getConverterHref = (
+  converter: Converter,
+  market: MarketCode = "global",
+) =>
   converter.slug === "image-to-text"
-    ? "/"
-    : `/convert/${encodeURIComponent(converter.slug)}`;
+    ? prefixMarketPath("/ocr", market)
+    : prefixMarketPath(`/convert/${encodeURIComponent(converter.slug)}`, market);
 
 export const getConverterPrimaryInput = (converter: Converter) =>
   converter.accept.mimeTypes.includes("image/*") &&

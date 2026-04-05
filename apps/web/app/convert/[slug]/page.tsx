@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { ConverterPage } from "../../../src/components/ConverterPage";
-import { getConverterBySlug } from "../../../src/lib/converters";
+import { getConverterBySlug, getConverterHref } from "../../../src/lib/converters";
+import { getCurrentMarket } from "../../lib/markets";
 import { getConverterMetadata } from "../../lib/seo";
 
 type PageProps = {
@@ -26,7 +27,9 @@ export async function generateMetadata({
     notFound();
   }
 
-  return getConverterMetadata(converter);
+  const market = await getCurrentMarket();
+
+  return getConverterMetadata(converter, market);
 }
 
 export default async function ConverterSlugPage({ params }: PageProps) {
@@ -42,7 +45,8 @@ export default async function ConverterSlugPage({ params }: PageProps) {
     notFound();
   }
   if (converter.slug === "image-to-text") {
-    permanentRedirect("/");
+    const market = await getCurrentMarket();
+    permanentRedirect(getConverterHref(converter, market));
   }
   return <ConverterPage converter={converter} />;
 }

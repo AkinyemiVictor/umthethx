@@ -5,6 +5,7 @@ import {
   getConverterHref,
   getConverterPrimaryInput,
 } from "../../src/lib/converters";
+import type { MarketCode } from "../../src/lib/markets";
 
 const DEFAULT_SITE_URL = "https://umthethx.com";
 const DEFAULT_OG_IMAGE = "/apple-touch-icon.png";
@@ -772,7 +773,10 @@ export const getConverterSearchIntentLines = (converter: Converter) => {
   return lines;
 };
 
-export const getConverterMetadata = (converter: Converter) => {
+export const getConverterMetadata = (
+  converter: Converter,
+  market: MarketCode = "global",
+) => {
   const inputLabel = getFormatLabel(getConverterPrimaryInput(converter));
   const outputLabel = getFormatLabel(converter.outputFormat);
   const descriptionVerb = getDescriptionVerb(converter, outputLabel);
@@ -796,7 +800,7 @@ export const getConverterMetadata = (converter: Converter) => {
   return buildMetadata({
     title: `Free ${converter.title} Converter Online`,
     description,
-    path: getConverterHref(converter),
+    path: getConverterHref(converter, market),
     keywords: getConverterSeoKeywords(converter),
   });
 };

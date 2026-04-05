@@ -10,6 +10,7 @@ import {
   getConverterPrimaryInput,
 } from "../lib/converters";
 import { getCurrentLanguage } from "../lib/i18n";
+import { getCurrentMarket, prefixMarketPath } from "../lib/markets";
 import {
   createBreadcrumbStructuredData,
   createFaqStructuredData,
@@ -33,6 +34,7 @@ import { ConverterGrid } from "../../src/components/ConverterGrid";
 
 export async function ConverterPage({ converter }: { converter: Converter }) {
   const lang = await getCurrentLanguage();
+  const market = await getCurrentMarket();
   const t = getTranslator(lang);
   const formats = getConverterFormats(converter);
   const primaryInput = getConverterPrimaryInput(converter);
@@ -77,12 +79,12 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
 
   const structuredData = [
     createBreadcrumbStructuredData([
-      { name: "Home", path: "/" },
-      { name: converter.title, path: getConverterHref(converter) },
+      { name: "Home", path: prefixMarketPath("/ocr", market) },
+      { name: converter.title, path: getConverterHref(converter, market) },
     ]),
     createSoftwareApplicationStructuredData({
       name: `${converter.title} Converter`,
-      path: getConverterHref(converter),
+      path: getConverterHref(converter, market),
       description: heroDescription,
       featureList: benefitHighlights,
       keywords: getConverterSeoKeywords(converter),
@@ -185,7 +187,7 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
                 {relatedConverters.map((item) => (
                   <Link
                     key={item.slug}
-                    href={getConverterHref(item)}
+                    href={getConverterHref(item, market)}
                     className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]"
                   >
                     {item.title}
@@ -231,6 +233,7 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
           currentSlug={converter.slug}
           heading={t("grid.title")}
           description={t("grid.description")}
+          market={market}
         />
 
         {showAds ? (

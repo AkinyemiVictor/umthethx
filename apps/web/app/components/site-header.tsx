@@ -21,6 +21,12 @@ import {
   getConverterHref,
   getConverterPrimaryInput,
 } from "../lib/converters";
+import {
+  getPathMarket,
+  prefixMarketPath,
+  resolveMarketPathAlias,
+  stripMarketPrefix,
+} from "../../src/lib/markets";
 
 type SiteHeaderProps = {
   converters: Converter[];
@@ -33,6 +39,8 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const t = useTranslations();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const market = getPathMarket(pathname);
+  const homeHref = prefixMarketPath("/ocr", market);
   const converterToggleRef = useRef<HTMLInputElement | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileConvertersOpen, setIsMobileConvertersOpen] = useState(false);
@@ -103,7 +111,9 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
 
   const currentMode = normalizeMode(searchParams?.get("mode"));
   const currentSubtype = searchParams?.get("subtype") ?? "";
-  const isNoteMakerPage = pathname?.startsWith("/ai-notemaker");
+  const isNoteMakerPage = resolveMarketPathAlias(
+    stripMarketPrefix(pathname).pathname,
+  ).startsWith("/ai-notemaker");
   const activeSubtype =
     currentMode === "general" || currentMode === "smart"
       ? ""
@@ -118,7 +128,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
       params.set("subtype", subtype);
     }
     const query = params.toString();
-    return query ? `/ai-notemaker?${query}` : "/ai-notemaker";
+    return prefixMarketPath(query ? `/ai-notemaker?${query}` : "/ai-notemaker", market);
   };
 
   return (
@@ -147,7 +157,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         />
       ) : null}
       <header className="flex items-center justify-between gap-3 sm:gap-6">
-        <Link href="/" className="flex items-center gap-3 shrink-0">
+        <Link href={homeHref} className="flex items-center gap-3 shrink-0">
           <Image
             src="/logo/logo%202.png"
             alt="Umthethx logo"
@@ -172,7 +182,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[740px]:flex min-[740px]:gap-6 min-[740px]:text-sm">
             <div className="inline-flex overflow-hidden rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
               <Link
-                href="/"
+                href={homeHref}
                 onClick={() => {
                   closeNoteMaker();
                   closeConverters();
@@ -214,7 +224,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             </div>
             <div className="inline-flex overflow-hidden rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
               <Link
-                href="/ai-notemaker"
+                href={prefixMarketPath("/ai-notemaker", market)}
                 onClick={() => {
                   closeConverters();
                   closeNoteMaker();
@@ -397,7 +407,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                           {group.items.map((converter) => (
                             <Link
                               key={converter.slug}
-                              href={getConverterHref(converter)}
+                              href={getConverterHref(converter, market)}
                               onClick={closeMobileMenu}
                               className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs text-zinc-600 transition hover:bg-[var(--brand-50)] hover:text-zinc-900 dark:text-[var(--muted)] dark:hover:text-[var(--foreground)]"
                             >
@@ -548,7 +558,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                     return (
                       <Link
                         key={converter.slug}
-                        href={getConverterHref(converter)}
+                        href={getConverterHref(converter, market)}
                         aria-current={isActive ? "page" : undefined}
                         className={[
                           "flex min-h-[72px] flex-col justify-between rounded-2xl border p-3 shadow-sm shadow-black/10 transition",

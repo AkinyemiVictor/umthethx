@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import { ConverterGrid } from "../src/components/ConverterGrid";
 import {
   converters,
   footerConverters,
   getConverterAccept,
   getConverterBySlug,
+  getConverterHref,
   getConverterFormats,
 } from "../src/lib/converters";
 import { ConverterWorkflow } from "./components/converter-workflow";
@@ -13,6 +15,7 @@ import { SiteFooter } from "./components/site-footer";
 import { SiteHeader } from "./components/site-header";
 import { HowItWorksSection } from "./components/how-it-works-section";
 import { getCurrentLanguage } from "./lib/i18n";
+import { getCurrentMarket, prefixMarketPath } from "./lib/markets";
 import {
   buildMetadata,
   createFaqStructuredData,
@@ -29,15 +32,20 @@ import { getTranslator } from "./lib/translations";
 
 const homeConverter = getConverterBySlug("image-to-text");
 
-export const metadata = homeConverter
-  ? getConverterMetadata(homeConverter)
-  : buildMetadata({
-      title: "Image to Text Converter",
-      description:
-        "Free image to text converter online. Upload image files and extract editable text in your browser.",
-      path: "/",
-      keywords: ["image to text", "online ocr", "image to text converter"],
-    });
+export async function generateMetadata(): Promise<Metadata> {
+  const market = await getCurrentMarket();
+  const homePath = prefixMarketPath("/ocr", market);
+
+  return homeConverter
+    ? getConverterMetadata(homeConverter, market)
+    : buildMetadata({
+        title: "Image to Text Converter",
+        description:
+          "Free image to text converter online. Upload image files and extract editable text in your browser.",
+        path: homePath,
+        keywords: ["image to text", "online ocr", "image to text converter"],
+      });
+}
 
 export default async function Home() {
   const converter = homeConverter;
@@ -45,7 +53,9 @@ export default async function Home() {
     return null;
   }
   const lang = await getCurrentLanguage();
+  const market = await getCurrentMarket();
   const t = getTranslator(lang);
+  const homePath = getConverterHref(converter, market);
 
   const formats = getConverterFormats(converter);
   const accept = getConverterAccept(converter);
@@ -80,7 +90,7 @@ export default async function Home() {
   const structuredData = [
     createSoftwareApplicationStructuredData({
       name: `${converter.title} Converter`,
-      path: "/",
+      path: homePath,
       description: heroDescription,
       featureList: benefitHighlights,
       keywords: getConverterSeoKeywords(converter),
@@ -213,6 +223,7 @@ export default async function Home() {
           currentSlug={converter.slug}
           heading={t("grid.title")}
           description={t("grid.description")}
+          market={market}
         />
 
         {showAds ? (

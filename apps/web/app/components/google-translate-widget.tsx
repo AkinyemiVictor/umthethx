@@ -21,12 +21,47 @@ declare global {
   }
 }
 
+type LanguageOption = {
+  code: string;
+  label: string;
+};
+
 const SCRIPT_ID = "google-translate-element-script";
 const WIDGET_ID = "google_translate_element_header";
 const STORAGE_KEY = "umthethx_google_translate_language";
 const RESET_EXPIRY = "Thu, 01 Jan 1970 00:00:00 GMT";
+const DEFAULT_LANGUAGE = "en";
 
-// Keep cookie writes centralized so resetting back to English is reliable.
+const LANGUAGE_OPTIONS: LanguageOption[] = [
+  { code: "en", label: "English" },
+  { code: "af", label: "Afrikaans" },
+  { code: "ar", label: "Arabic" },
+  { code: "bn", label: "Bengali" },
+  { code: "zh-CN", label: "Chinese (Simplified)" },
+  { code: "zh-TW", label: "Chinese (Traditional)" },
+  { code: "nl", label: "Dutch" },
+  { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "el", label: "Greek" },
+  { code: "gu", label: "Gujarati" },
+  { code: "ha", label: "Hausa" },
+  { code: "hi", label: "Hindi" },
+  { code: "ig", label: "Igbo" },
+  { code: "id", label: "Indonesian" },
+  { code: "it", label: "Italian" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+  { code: "pt", label: "Portuguese" },
+  { code: "ru", label: "Russian" },
+  { code: "es", label: "Spanish" },
+  { code: "sw", label: "Swahili" },
+  { code: "tr", label: "Turkish" },
+  { code: "uk", label: "Ukrainian" },
+  { code: "ur", label: "Urdu" },
+  { code: "vi", label: "Vietnamese" },
+  { code: "yo", label: "Yoruba" },
+];
+
 const setGoogleTranslateCookie = (value: string | null) => {
   if (typeof window === "undefined") return;
 
@@ -35,11 +70,7 @@ const setGoogleTranslateCookie = (value: string | null) => {
   const rootDomain =
     parts.length >= 2 ? `.${parts.slice(-2).join(".")}` : hostname;
 
-  const targets = [
-    "",
-    `domain=${hostname}; `,
-    `domain=${rootDomain}; `,
-  ];
+  const targets = ["", `domain=${hostname}; `, `domain=${rootDomain}; `];
 
   for (const prefix of targets) {
     if (value) {
@@ -50,12 +81,21 @@ const setGoogleTranslateCookie = (value: string | null) => {
   }
 };
 
-// Hide Google’s injected banner/tooltip artifacts so translation stays unobtrusive.
 const suppressGoogleTranslateArtifacts = () => {
   if (typeof window === "undefined") return;
 
   document.querySelectorAll<HTMLElement>(
-    "iframe.goog-te-banner-frame, .goog-te-banner-frame, #goog-gt-tt, .goog-tooltip, .goog-tooltip:hover",
+    [
+      "iframe.goog-te-banner-frame",
+      ".goog-te-banner-frame",
+      "body > .skiptranslate",
+      "body > iframe.skiptranslate",
+      "body > [class*='VIpgJd-ZVi9od']",
+      "iframe[class*='VIpgJd-ZVi9od']",
+      "#goog-gt-tt",
+      ".goog-tooltip",
+      ".goog-tooltip:hover",
+    ].join(", "),
   ).forEach((node) => {
     node.style.display = "none";
     node.style.visibility = "hidden";
@@ -66,63 +106,16 @@ const suppressGoogleTranslateArtifacts = () => {
     node.style.boxShadow = "none";
   });
 
+  if (document.documentElement) {
+    document.documentElement.style.top = "0px";
+    document.documentElement.style.marginTop = "0px";
+  }
+
   if (document.body) {
     document.body.style.top = "0px";
   }
 };
 
-// Add English back into the same Google select and persist the user choice.
-const wireTranslateSelect = () => {
-  if (typeof window === "undefined") return;
-
-  const container = document.getElementById(WIDGET_ID);
-  const select = container?.querySelector("select.goog-te-combo");
-  if (!(select instanceof HTMLSelectElement)) {
-    return;
-  }
-
-  if (!select.querySelector('option[value=""]')) {
-    const english = document.createElement("option");
-    english.value = "";
-    english.textContent = "English";
-    select.insertBefore(english, select.firstChild);
-  }
-
-  const saved = window.localStorage.getItem(STORAGE_KEY) ?? "en";
-  if (saved === "en") {
-    select.value = "";
-  } else if (Array.from(select.options).some((option) => option.value === saved)) {
-    setGoogleTranslateCookie(`/en/${saved}`);
-    if (select.value !== saved) {
-      select.value = saved;
-      window.setTimeout(() => {
-        select.dispatchEvent(new Event("change"));
-      }, 0);
-    }
-  }
-
-  if (select.dataset.umthethxBound === "true") {
-    return;
-  }
-
-  select.addEventListener("change", () => {
-    const next = select.value || "en";
-    window.localStorage.setItem(STORAGE_KEY, next);
-
-    if (next === "en") {
-      setGoogleTranslateCookie(null);
-      window.location.reload();
-      return;
-    }
-
-    setGoogleTranslateCookie(`/en/${next}`);
-    window.setTimeout(suppressGoogleTranslateArtifacts, 50);
-  });
-
-  select.dataset.umthethxBound = "true";
-};
-
-// Initialize the Google Website Translator element once its script is ready.
 const initializeGoogleTranslate = () => {
   if (typeof window === "undefined") return;
 
@@ -143,17 +136,28 @@ const initializeGoogleTranslate = () => {
   );
   container.dataset.ready = "true";
 
-  window.setTimeout(() => {
-    wireTranslateSelect();
-    suppressGoogleTranslateArtifacts();
-  }, 200);
+  window.setTimeout(suppressGoogleTranslateArtifacts, 100);
+  window.setTimeout(suppressGoogleTranslateArtifacts, 500);
+  window.setTimeout(suppressGoogleTranslateArtifacts, 1500);
 };
 
 export function GoogleTranslateWidget() {
   const [open, setOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const savedLanguage =
+      window.localStorage.getItem(STORAGE_KEY) ?? DEFAULT_LANGUAGE;
+
+    setSelectedLanguage(savedLanguage);
+
+    if (savedLanguage === "en") {
+      setGoogleTranslateCookie(null);
+    } else {
+      setGoogleTranslateCookie(`/en/${savedLanguage}`);
+    }
+
     const init = () => initializeGoogleTranslate();
     window.googleTranslateElementInit = init;
 
@@ -173,14 +177,10 @@ export function GoogleTranslateWidget() {
       script.src =
         "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
       script.async = true;
-      script.onload = init;
       document.body.appendChild(script);
-    } else {
-      script.addEventListener("load", init);
     }
 
     return () => {
-      script?.removeEventListener("load", init);
       if (window.googleTranslateElementInit === init) {
         delete window.googleTranslateElementInit;
       }
@@ -207,18 +207,7 @@ export function GoogleTranslateWidget() {
   useEffect(() => {
     if (!open) return;
 
-    wireTranslateSelect();
-
-    const observer = new MutationObserver(() => {
-      wireTranslateSelect();
-    });
-
-    const container = document.getElementById(WIDGET_ID);
-    if (container) {
-      observer.observe(container, { childList: true, subtree: true });
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent) => {
       if (
         panelRef.current &&
         event.target instanceof Node &&
@@ -234,25 +223,53 @@ export function GoogleTranslateWidget() {
       }
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleEscape);
 
     return () => {
-      observer.disconnect();
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleEscape);
     };
   }, [open]);
 
+  const applyLanguage = (nextLanguage: string) => {
+    setSelectedLanguage(nextLanguage);
+    window.localStorage.setItem(STORAGE_KEY, nextLanguage);
+
+    if (nextLanguage === "en") {
+      setGoogleTranslateCookie(null);
+    } else {
+      setGoogleTranslateCookie(`/en/${nextLanguage}`);
+    }
+
+    window.location.reload();
+  };
+
   return (
     <>
+      <div
+        id={WIDGET_ID}
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-[9999px] top-0 h-px w-px overflow-hidden opacity-0"
+      />
+
       <div ref={panelRef} className="relative z-30 flex items-center">
         <button
           type="button"
           aria-label="Toggle Google Translate"
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-sm shadow-black/5 transition duration-200 hover:scale-[1.03] hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:shadow-none dark:focus-visible:ring-offset-[var(--background)] dark:hover:bg-[var(--surface-3)]"
+          className={[
+            "inline-flex h-10 w-10 items-center justify-center rounded-full border bg-white text-zinc-700 shadow-sm shadow-black/5 transition duration-200",
+            "hover:scale-[1.03] hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+            "dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:shadow-none dark:focus-visible:ring-offset-[var(--background)] dark:hover:bg-[var(--surface-3)]",
+            open
+              ? "border-[var(--brand-400)] bg-[var(--brand-50)]"
+              : "border-zinc-200 dark:border-[var(--border-2)]",
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
           <svg
             aria-hidden="true"
@@ -266,67 +283,57 @@ export function GoogleTranslateWidget() {
 
         <div
           className={[
-            "absolute right-0 top-full mt-3 w-[260px] max-w-[calc(100vw-2rem)] origin-top-right rounded-2xl border border-zinc-300 bg-white/95 p-3 shadow-xl shadow-black/15 backdrop-blur transition-all duration-200 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-black/35",
-            open
-              ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
-              : "pointer-events-none -translate-y-1 scale-95 opacity-0",
+            "absolute right-0 top-full z-40 mt-3 w-[244px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-xl shadow-black/12 backdrop-blur dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:shadow-black/30",
+            open ? "block" : "hidden",
           ]
             .filter(Boolean)
             .join(" ")}
         >
-          <div id={WIDGET_ID} />
+          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-[var(--muted-2)]">
+            Translate Page
+          </div>
+          <label htmlFor="google-translate-language" className="sr-only">
+            Translate page
+          </label>
+          <div className="relative">
+            <select
+              id="google-translate-language"
+              value={selectedLanguage}
+              onChange={(event) => applyLanguage(event.target.value)}
+              className="w-full appearance-none rounded-full border border-zinc-200 bg-white px-4 py-2.5 pr-11 text-sm font-semibold text-zinc-900 shadow-sm shadow-black/5 outline-none transition focus:border-[var(--brand-400)] focus:ring-2 focus:ring-[var(--brand-ring)] dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)]"
+            >
+              {LANGUAGE_OPTIONS.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-zinc-400 dark:text-[var(--muted-2)]">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 7.5 10 12.5 15 7.5" />
+              </svg>
+            </span>
+          </div>
         </div>
       </div>
 
       <style jsx global>{`
-        #${WIDGET_ID} .goog-te-gadget {
-          display: block !important;
-          color: inherit !important;
-          font-family: inherit !important;
-          font-size: 0.875rem !important;
-          line-height: 1.25rem !important;
-        }
-
-        #${WIDGET_ID} .goog-te-gadget > span:last-child,
-        #${WIDGET_ID} .goog-logo-link {
+        .goog-te-banner-frame.skiptranslate,
+        body > .skiptranslate,
+        body > iframe.skiptranslate,
+        body > [class*="VIpgJd-ZVi9od"],
+        iframe[class*="VIpgJd-ZVi9od"] {
           display: none !important;
-        }
-
-        #${WIDGET_ID} .goog-te-combo {
-          width: 100%;
-          min-height: 42px;
-          border: 1px solid rgb(212 212 216);
-          border-radius: 0.875rem;
-          background: #ffffff;
-          color: #18181b;
-          font: inherit;
-          font-size: 0.875rem;
-          font-weight: 600;
-          line-height: 1.25rem;
-          padding: 0 0.875rem;
-          outline: none;
-          appearance: auto;
-          -webkit-appearance: menulist;
-        }
-
-        #${WIDGET_ID} .goog-te-combo option {
-          color: #18181b;
-          background: #ffffff;
-        }
-
-        .dark #${WIDGET_ID} .goog-te-combo {
-          border-color: var(--border-2);
-          background: var(--surface-3);
-          color: var(--foreground);
-        }
-
-        .dark #${WIDGET_ID} .goog-te-combo option {
-          color: var(--foreground);
-          background: var(--surface-3);
-        }
-
-        .goog-te-banner-frame.skiptranslate {
-          display: none !important;
+          visibility: hidden !important;
         }
 
         #goog-gt-tt,
@@ -335,6 +342,11 @@ export function GoogleTranslateWidget() {
         .goog-text-highlight {
           background-color: transparent !important;
           box-shadow: none !important;
+        }
+
+        html {
+          top: 0 !important;
+          margin-top: 0 !important;
         }
 
         body {

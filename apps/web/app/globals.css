@@ -34,6 +34,63 @@
   --brand-ring: rgba(74, 108, 255, 0.45);
 }
 
+html[data-market="ng"] {
+  --brand-50: #eef9f2;
+  --brand-400: #44b36a;
+  --brand-500: #198754;
+  --brand-600: #157347;
+  --brand-700: #125f3a;
+  --brand-950: #0b2e1b;
+  --brand-ring: rgba(25, 135, 84, 0.28);
+}
+
+html.dark[data-market="ng"] {
+  --brand-50: rgba(25, 135, 84, 0.16);
+  --brand-400: rgba(68, 179, 106, 0.55);
+  --brand-500: #44b36a;
+  --brand-600: #37a15c;
+  --brand-700: #2d8d50;
+  --brand-ring: rgba(68, 179, 106, 0.45);
+}
+
+html[data-market="za"] {
+  --brand-50: #eef8fb;
+  --brand-400: #2e8dac;
+  --brand-500: #0f6c8d;
+  --brand-600: #0c5a75;
+  --brand-700: #0a4b61;
+  --brand-950: #062733;
+  --brand-ring: rgba(15, 108, 141, 0.28);
+}
+
+html.dark[data-market="za"] {
+  --brand-50: rgba(15, 108, 141, 0.18);
+  --brand-400: rgba(46, 141, 172, 0.55);
+  --brand-500: #3b9fc2;
+  --brand-600: #2f8bae;
+  --brand-700: #26779a;
+  --brand-ring: rgba(59, 159, 194, 0.45);
+}
+
+html[data-market="ug"] {
+  --brand-50: #fff6ea;
+  --brand-400: #f2a541;
+  --brand-500: #d97706;
+  --brand-600: #c06100;
+  --brand-700: #9d4d00;
+  --brand-950: #4b2500;
+  --brand-ring: rgba(217, 119, 6, 0.28);
+}
+
+html.dark[data-market="ug"] {
+  --brand-50: rgba(217, 119, 6, 0.16);
+  --brand-400: rgba(242, 165, 65, 0.55);
+  --brand-500: #f2a541;
+  --brand-600: #e29126;
+  --brand-700: #c97a10;
+  --brand-ring: rgba(242, 165, 65, 0.45);
+}
+
 html,
 body {
   max-width: 100vw;

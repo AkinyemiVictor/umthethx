@@ -7,12 +7,14 @@ import {
   getConverterHref,
   getConverterPrimaryInput,
 } from "../lib/converters";
+import type { MarketCode } from "../lib/markets";
 
 type ConverterGridProps = {
   converters: Converter[];
   currentSlug?: string;
   heading?: string;
   description?: string;
+  market?: MarketCode;
 };
 
 export function ConverterGrid({
@@ -20,6 +22,7 @@ export function ConverterGrid({
   currentSlug,
   heading = "Converters",
   description = "Switch to another converter in one click.",
+  market = "global",
 }: ConverterGridProps) {
   const converterGroups = getConverterCategoryGroups(converters);
 
@@ -62,7 +65,7 @@ export function ConverterGrid({
                 return (
                   <Link
                     key={item.slug}
-                    href={getConverterHref(item)}
+                    href={getConverterHref(item, market)}
                     aria-current={isActive ? "page" : undefined}
                     className={[
                       "rounded-xl border p-3 transition",

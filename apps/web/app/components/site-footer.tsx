@@ -1,9 +1,13 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { Converter } from "../lib/converters";
 import { type TranslationKey } from "../lib/translations";
 import { useTranslations } from "./language-provider";
+import { getConverterHref } from "../../src/lib/converters";
+import { getPathMarket, prefixMarketPath } from "../../src/lib/markets";
 
 type SiteFooterProps = {
   footerConverters: Converter[];
@@ -16,12 +20,12 @@ const quickLinks: Array<{ key: TranslationKey; href: string }> = [
   { key: "footer.contact", href: "/contact" },
 ];
 
-const footerNoteMakerTypes: TranslationKey[] = [
-  "aiNoteMaker.typeSmart",
-  "aiNoteMaker.typeAcademic",
-  "aiNoteMaker.typeMedical",
-  "aiNoteMaker.typeLegal",
-  "aiNoteMaker.typeBusiness",
+const footerNoteMakerTypes: Array<{ key: TranslationKey; href: string }> = [
+  { key: "aiNoteMaker.typeSmart", href: "/ai-notemaker?mode=smart" },
+  { key: "aiNoteMaker.typeAcademic", href: "/ai-notemaker?mode=academic" },
+  { key: "aiNoteMaker.typeMedical", href: "/ai-notemaker?mode=medical" },
+  { key: "aiNoteMaker.typeLegal", href: "/ai-notemaker?mode=legal" },
+  { key: "aiNoteMaker.typeBusiness", href: "/ai-notemaker?mode=business" },
 ];
 
 const socialLinks = [
@@ -81,25 +85,30 @@ const socialLinks = [
 
 export function SiteFooter({ footerConverters }: SiteFooterProps) {
   const t = useTranslations();
+  const pathname = usePathname();
+  const market = getPathMarket(pathname);
+  const homeHref = prefixMarketPath("/ocr", market);
 
   return (
     <footer className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
       <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr_1fr_1fr]">
         <div className="space-y-3">
-          <Image
-            src="/logo/logo%202.png"
-            alt="Umthethx logo"
-            width={120}
-            height={38}
-            className="h-auto w-auto dark:hidden"
-          />
-          <Image
-            src="/logo/UMTHETHX%20dark%20mode%202.png"
-            alt="Umthethx logo"
-            width={120}
-            height={38}
-            className="hidden h-auto w-auto dark:block"
-          />
+          <Link href={homeHref} className="inline-flex">
+            <Image
+              src="/logo/logo%202.png"
+              alt="Umthethx logo"
+              width={120}
+              height={38}
+              className="h-auto w-auto dark:hidden"
+            />
+            <Image
+              src="/logo/UMTHETHX%20dark%20mode%202.png"
+              alt="Umthethx logo"
+              width={120}
+              height={38}
+              className="hidden h-auto w-auto dark:block"
+            />
+          </Link>
           <p className="text-sm text-zinc-600 dark:text-[var(--muted)]">
             {t("footer.tagline")}
           </p>
@@ -129,7 +138,14 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
           </h3>
           <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
             {footerConverters.map((converter) => (
-              <li key={converter.title}>{converter.title}</li>
+              <li key={converter.title}>
+                <Link
+                  href={getConverterHref(converter, market)}
+                  className="transition hover:text-zinc-900 dark:hover:text-[var(--foreground)]"
+                >
+                  {converter.title}
+                </Link>
+              </li>
             ))}
           </ul>
         </div>
@@ -139,8 +155,15 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
             {t("header.noteMakerTypes")}
           </h3>
           <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
-            {footerNoteMakerTypes.map((typeKey) => (
-              <li key={typeKey}>{t(typeKey)}</li>
+            {footerNoteMakerTypes.map((item) => (
+              <li key={item.key}>
+                <Link
+                  href={prefixMarketPath(item.href, market)}
+                  className="transition hover:text-zinc-900 dark:hover:text-[var(--foreground)]"
+                >
+                  {t(item.key)}
+                </Link>
+              </li>
             ))}
           </ul>
         </div>
@@ -152,12 +175,12 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
           <ul className="mt-3 space-y-2 text-sm text-zinc-600 dark:text-[var(--muted)]">
             {quickLinks.map((link) => (
               <li key={link.key}>
-                <a
-                  href={link.href}
+                <Link
+                  href={prefixMarketPath(link.href, market)}
                   className="transition hover:text-zinc-900 dark:hover:text-[var(--foreground)]"
                 >
                   {t(link.key)}
-                </a>
+                </Link>
               </li>
             ))}
           </ul>
