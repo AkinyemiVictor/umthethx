@@ -296,6 +296,10 @@ export const translations = {
     "workflow.usageBlocked": "Free conversion limit reached. Convert again in {time}.",
     "workflow.usageResets": "Resets in {time}.",
     "workflow.usageLoading": "Checking usage...",
+    "workflow.splitRangesLabel": "Page ranges",
+    "workflow.splitRangesPlaceholder": "Example: 1-3, 5, 8-10",
+    "workflow.splitRangesHint":
+      "Optional. Leave blank to split every page into a separate PDF. Use commas or new lines between ranges.",
     "theme.toggleLabel": "Toggle color mode",
     "theme.dark": "Dark",
     "theme.light": "Light",
@@ -409,6 +413,10 @@ export const translations = {
     "workflow.fetchStatusFailed":
       "Impossible de récupérer l’état du traitement.",
     "workflow.removeFileAria": "Supprimer {filename}",
+    "workflow.splitRangesLabel": "Plages de pages",
+    "workflow.splitRangesPlaceholder": "Exemple : 1-3, 5, 8-10",
+    "workflow.splitRangesHint":
+      "Facultatif. Laissez vide pour séparer chaque page dans un PDF distinct. Utilisez des virgules ou des retours à la ligne.",
     "theme.toggleLabel": "Basculer le mode couleur",
     "theme.dark": "Sombre",
     "theme.light": "Clair",
@@ -519,6 +527,10 @@ export const translations = {
     "workflow.fetchStatusFailed":
       "No se pudo obtener el estado del trabajo.",
     "workflow.removeFileAria": "Eliminar {filename}",
+    "workflow.splitRangesLabel": "Rangos de páginas",
+    "workflow.splitRangesPlaceholder": "Ejemplo: 1-3, 5, 8-10",
+    "workflow.splitRangesHint":
+      "Opcional. Déjalo vacío para dividir cada página en un PDF separado. Usa comas o saltos de línea entre rangos.",
     "theme.toggleLabel": "Cambiar modo de color",
     "theme.dark": "Oscuro",
     "theme.light": "Claro",
@@ -631,6 +643,10 @@ export const translations = {
     "workflow.fetchStatusFailed":
       "Job-Status konnte nicht abgerufen werden.",
     "workflow.removeFileAria": "{filename} entfernen",
+    "workflow.splitRangesLabel": "Seitenbereiche",
+    "workflow.splitRangesPlaceholder": "Beispiel: 1-3, 5, 8-10",
+    "workflow.splitRangesHint":
+      "Optional. Leer lassen, um jede Seite in eine eigene PDF zu teilen. Verwenden Sie Kommas oder Zeilenumbrüche zwischen Bereichen.",
     "theme.toggleLabel": "Farbmodus umschalten",
     "theme.dark": "Dunkel",
     "theme.light": "Hell",
@@ -742,6 +758,10 @@ export const translations = {
     "workflow.fetchStatusFailed":
       "Não foi possível obter o status do trabalho.",
     "workflow.removeFileAria": "Remover {filename}",
+    "workflow.splitRangesLabel": "Intervalos de páginas",
+    "workflow.splitRangesPlaceholder": "Exemplo: 1-3, 5, 8-10",
+    "workflow.splitRangesHint":
+      "Opcional. Deixe em branco para dividir cada página em um PDF separado. Use vírgulas ou novas linhas entre os intervalos.",
     "theme.toggleLabel": "Alternar modo de cor",
     "theme.dark": "Escuro",
     "theme.light": "Claro",
@@ -851,6 +871,10 @@ export const translations = {
     "workflow.conversionFailed": "فشل التحويل.",
     "workflow.fetchStatusFailed": "تعذر جلب حالة المهمة.",
     "workflow.removeFileAria": "إزالة {filename}",
+    "workflow.splitRangesLabel": "نطاقات الصفحات",
+    "workflow.splitRangesPlaceholder": "مثال: 1-3، 5، 8-10",
+    "workflow.splitRangesHint":
+      "اختياري. اتركه فارغاً لتقسيم كل صفحة إلى ملف PDF منفصل. استخدم الفواصل أو الأسطر الجديدة بين النطاقات.",
     "theme.toggleLabel": "تبديل وضع الألوان",
     "theme.dark": "داكن",
     "theme.light": "فاتح",

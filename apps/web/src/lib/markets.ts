@@ -6,6 +6,12 @@ export type SupportedMarket = (typeof supportedMarkets)[number];
 export type MarketCode = SupportedMarket | "global";
 
 export const DEFAULT_MARKET: MarketCode = "global";
+export const defaultHrefLang = "x-default";
+export const marketHrefLangMap: Record<SupportedMarket, string> = {
+  ng: "en-ng",
+  za: "en-za",
+  ug: "en-ug",
+};
 
 const supportedMarketSet = new Set<string>(supportedMarkets);
 const marketRouteAliases = new Map<string, string>([

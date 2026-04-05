@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { AdSlot } from "../components/ad-slot";
 import { MobileRectangleAds } from "../components/mobile-rectangle-ads";
 import { SiteFooter } from "../components/site-footer";
@@ -6,7 +7,26 @@ import { AiNoteMakerWorkspace } from "../components/ai-note-maker";
 import { AiNoteMakerTypeGrid } from "../components/ai-note-maker-type-grid";
 import { converters, footerConverters } from "../lib/converters";
 import { getCurrentLanguage } from "../lib/i18n";
+import { getCurrentMarket, prefixMarketPath } from "../lib/markets";
+import { buildMetadata } from "../lib/seo";
 import { getTranslator } from "../lib/translations";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const market = await getCurrentMarket();
+
+  return buildMetadata({
+    title: "AI NoteMaker",
+    description:
+      "AI NoteMaker online. Turn PDFs, DOCX files, transcripts, and long text into clear notes, summaries, and action items.",
+    path: prefixMarketPath("/ai-notemaker", market),
+    keywords: [
+      "ai note maker",
+      "notes from pdf",
+      "summarize document online",
+      "ai notes generator",
+    ],
+  });
+}
 
 export default async function AiNoteMakerPage() {
   const lang = await getCurrentLanguage();

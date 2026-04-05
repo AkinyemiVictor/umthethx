@@ -15,11 +15,16 @@ export type JobOutput = {
   filename: string;
 };
 
+export type JobOptions = {
+  pageRanges?: string | null;
+};
+
 export type JobRecord = {
   id: string;
   status: JobStatus;
   converterSlug: string;
   inputs: JobInput[];
+  options?: JobOptions;
   outputs: JobOutput[];
   expiresAt: string;
   error?: string | null;

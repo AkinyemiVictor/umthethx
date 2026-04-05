@@ -5,7 +5,15 @@ import {
   getConverterHref,
   getConverterPrimaryInput,
 } from "../../src/lib/converters";
-import type { MarketCode } from "../../src/lib/markets";
+import {
+  DEFAULT_MARKET,
+  defaultHrefLang,
+  marketHrefLangMap,
+  prefixMarketPath,
+  stripMarketPrefix,
+  supportedMarkets,
+  type MarketCode,
+} from "../../src/lib/markets";
 
 const DEFAULT_SITE_URL = "https://umthethx.com";
 const DEFAULT_OG_IMAGE = "/apple-touch-icon.png";
@@ -175,6 +183,24 @@ export const defaultMetadata: Metadata = {
   },
 };
 
+const buildHrefLangAlternates = (path: string) => {
+  const { pathname } = stripMarketPrefix(path);
+  const languages = Object.fromEntries(
+    supportedMarkets.map((market) => [
+      marketHrefLangMap[market],
+      absoluteUrl(prefixMarketPath(pathname, market)),
+    ]),
+  );
+
+  return {
+    canonical: path,
+    languages: {
+      ...languages,
+      [defaultHrefLang]: absoluteUrl(prefixMarketPath(pathname, DEFAULT_MARKET)),
+    },
+  };
+};
+
 export const buildMetadata = (input: {
   title: string;
   description: string;
@@ -184,9 +210,7 @@ export const buildMetadata = (input: {
   title: input.title,
   description: input.description,
   keywords: dedupeKeywords(input.keywords ?? []),
-  alternates: {
-    canonical: input.path,
-  },
+  alternates: buildHrefLangAlternates(input.path),
   openGraph: {
     title: input.title,
     description: input.description,

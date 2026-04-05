@@ -5,6 +5,7 @@ import {
   getJobRecord,
   updateJobRecord,
   type JobInput,
+  type JobOptions,
 } from "../../../src/lib/job-store";
 import { getConvertQueueName, getQueue } from "../../../src/lib/queue";
 import { deleteS3Prefix, getS3ObjectSize } from "../../../src/lib/s3";
@@ -17,10 +18,12 @@ type CreateJobRequest = {
   jobId?: string;
   inputs?: JobInput[];
   uploads?: JobInput[];
+  options?: JobOptions;
 };
 
 const MAX_BATCH_SIZE = 5;
 const MAX_FILENAME_LENGTH = 180;
+const MAX_PAGE_RANGE_TEXT_LENGTH = 1000;
 
 const { allowedMimeTypes, wildcardPrefixes } = converters.reduce(
   (acc, converter) => {
@@ -101,6 +104,7 @@ export async function POST(request: Request) {
   const converterSlug = body.converterSlug?.trim();
   const jobId = body.jobId?.trim();
   const inputs = (body.inputs ?? body.uploads ?? []) as JobInput[];
+  const pageRanges = body.options?.pageRanges?.trim();
 
   if (!converterSlug) {
     return NextResponse.json(
@@ -133,6 +137,21 @@ export async function POST(request: Request) {
       { error: "Unknown converter slug." },
       { status: 404 },
     );
+  }
+
+  if (pageRanges) {
+    if (converter.slug !== "split-pdf") {
+      return NextResponse.json(
+        { error: "This converter does not accept page range options." },
+        { status: 400 },
+      );
+    }
+    if (pageRanges.length > MAX_PAGE_RANGE_TEXT_LENGTH) {
+      return NextResponse.json(
+        { error: "Page range input is too long." },
+        { status: 400 },
+      );
+    }
   }
 
   const prefix = `temp/${jobId}/uploads/`;
@@ -216,6 +235,7 @@ export async function POST(request: Request) {
     id: jobId,
     status: "queued",
     converterSlug: converter.slug,
+    options: pageRanges ? { pageRanges } : undefined,
     inputs: inputs.map((input) => ({
       key: input.key.trim(),
       filename: input.filename.trim(),

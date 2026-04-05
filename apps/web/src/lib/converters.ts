@@ -476,7 +476,7 @@ export const converters: ConverterDefinition[] = [
   defineConverter({
     slug: "split-pdf",
     title: "Split PDF",
-    description: "Split a PDF into separate pages.",
+    description: "Split a PDF into selected page ranges or separate pages.",
     categoryTags: ["pdf", "split"],
     acceptExtensions: ["pdf"],
     outputFormat: "pdf",

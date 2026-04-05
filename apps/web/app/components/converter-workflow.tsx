@@ -219,6 +219,7 @@ export function ConverterWorkflow({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const [splitRanges, setSplitRanges] = useState("");
   const [usageStatus, setUsageStatus] = useState<ConverterUsageStatus | null>(
     null,
   );
@@ -226,6 +227,7 @@ export function ConverterWorkflow({
   const [usageNowMs, setUsageNowMs] = useState(() => Date.now());
   const searchParams = useSearchParams();
   const initialJobId = searchParams?.get("jobId");
+  const isPdfSplitter = converter.slug === "split-pdf";
 
   const loadUsageStatus = async () => {
     const deviceId = getOrCreateDeviceId();
@@ -501,6 +503,7 @@ export function ConverterWorkflow({
       filename: string;
       contentType: string;
     }> = [];
+    const normalizedSplitRanges = splitRanges.trim();
     let activeJobId: string | null = null;
     const deviceId = getOrCreateDeviceId();
     const deviceHeaders: Record<string, string> = deviceId
@@ -590,6 +593,10 @@ export function ConverterWorkflow({
             converterSlug: converter.slug,
             jobId: activeJobId,
             inputs: collectedInputs,
+            options:
+              isPdfSplitter && normalizedSplitRanges
+                ? { pageRanges: normalizedSplitRanges }
+                : undefined,
           }),
         },
         ENQUEUE_REQUEST_TIMEOUT_MS,
@@ -948,6 +955,27 @@ export function ConverterWorkflow({
               : t("workflow.selectedFiles")}
           </div>
           <div className="mt-3 flex-1 overflow-y-auto pr-1">
+            {!outputs.length && isPdfSplitter ? (
+              <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 text-xs text-zinc-600 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--muted)]">
+                <label
+                  htmlFor="split-pdf-ranges"
+                  className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-[var(--muted-2)]"
+                >
+                  {t("workflow.splitRangesLabel")}
+                </label>
+                <textarea
+                  id="split-pdf-ranges"
+                  value={splitRanges}
+                  onChange={(event) => setSplitRanges(event.target.value)}
+                  placeholder={t("workflow.splitRangesPlaceholder")}
+                  disabled={isBusy}
+                  className="mt-2 h-20 w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 outline-none transition focus:border-[var(--brand-400)] focus:ring-2 focus:ring-[var(--brand-ring)] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]"
+                />
+                <p className="mt-2 leading-relaxed">
+                  {t("workflow.splitRangesHint")}
+                </p>
+              </div>
+            ) : null}
             {outputs.length ? (
               <>
                 <ul className="space-y-2 text-xs">

@@ -1701,6 +1701,157 @@ const buildLlmInstructions = ({
   specsLabel,
   missingLabel,
 }: Omit<LlmRequest, "text">) => {
+  if (domainForBlock === "legal") {
+    const specs = buildDomainSpecsList(domainForBlock, subtype);
+    const sections = getSectionDefinitions(domainForBlock, subtype);
+    const lines: string[] = [
+      "You are a legal-academic content reconstruction engine.",
+      "",
+      "Produce detailed, dense law study notes and legal analysis from the uploaded material.",
+      "",
+      "Required outputs:",
+      "1. Paragraph-by-paragraph summary.",
+      "- Summarize the judgment paragraph-by-paragraph in a concise, timeline-style format.",
+      "- Briefly state the purpose or substance of each paragraph.",
+      "- If the case is lengthy, organize the summaries into manageable batches of about 10 paragraphs.",
+      "- Omit exact dates unless essential.",
+      "",
+      "2. Case note using the FIRAC method in 5 parts.",
+      "- Facts: include only material facts relevant to the legal dispute.",
+      "- Issues: state the legal questions before the court clearly.",
+      "- Rules: include applicable legal rules, statutory provisions, and case law.",
+      "- Application: explain the court's reasoning and application of the legal rules.",
+      "- Conclusion: state the court's decision and its legal significance.",
+      "- Maintain original paragraph numbers in square brackets where available.",
+      "- Use formal legal language and inline OSCOLA citations where appropriate.",
+      "",
+      "3. Legal opinion.",
+      "- Draft a constitutional law legal opinion based only on the uploaded case.",
+      "- Do not reference or incorporate unrelated cases.",
+      "- Assess the legal merits, reasoning, and outcome within the constitutional context of the case.",
+      "",
+      "4. Identification of judicial citations.",
+      "- List all judicial authorities cited by the court.",
+      "- Use proper case names and OSCOLA citation format.",
+      "",
+      "5. Identification of legislative authorities.",
+      "- List all statutes and legislative provisions cited by the court.",
+      "- Include section numbers, full names of laws, and any constitutional provisions referenced.",
+      "",
+      "6. Analytical essay on cited authorities.",
+      "- Write an analytical essay discussing the cited cases, legislation, and any relevant legal articles.",
+      "- Explain how those authorities contribute to the judgment's legal reasoning.",
+      "- Use formal legal writing and OSCOLA referencing style throughout.",
+      "",
+      "7. Binding principles from the judgment.",
+      "- Identify the paragraph numbers that contain the court's binding legal principles and core reasoning.",
+      "- Exclude references to other courts' opinions or procedural summaries.",
+      "- Focus on this court's authoritative rulings.",
+      "",
+      "8. Study note making preferences.",
+      "- Prefer study notes reduced to about 50% of the original unless requested otherwise.",
+      "- Always use bullet point format unless requested otherwise.",
+      "- Prefer lengthy, detailed, and comprehensive summaries.",
+      "- Include legislation and relevant case law.",
+      "- Highlight legislation and court cases with LEGISLATION: and CASE: prefixes.",
+      "- Structure the notes by first identifying subheadings and then extracting the main points of each section.",
+      "- Exclude explanations and examples unless they are essential to the court's reasoning.",
+      "- Exclude learning activities, self-assessment, and activity feedback.",
+      "- Include DIAGRAM references when the source mentions diagram followed by a number.",
+      "- Ignore random two-digit or three-digit sequential footnote numbers unless they are part of a case name, case study name, or numbered object.",
+      "",
+      "Preserve:",
+      "- Page numbers",
+      "- Chapter numbers",
+      "- Learning units",
+      "- Headings",
+      "- Subheadings",
+      "- Table of contents structure",
+      "",
+      "Output format:",
+      "- Bullet points",
+      "- Structured under original headings",
+      "- Highlight legislation and cases",
+      "- Remove learning activities, self-assessment, and activity feedback",
+      "- Include diagram references when necessary",
+      "- Output plain text only; no code blocks",
+    ];
+
+    if (subtypeLabel) {
+      lines.push("", `Focus: ${subtypeLabel}`);
+    }
+
+    if (specs.length) {
+      lines.push("", `${specsLabel}:`);
+      specs.forEach((item) => {
+        lines.push(`- ${item}`);
+      });
+    }
+
+    if (sections.length) {
+      lines.push("", "When present, organize the notes around:");
+      sections.forEach((section) => {
+        const required = section.required ? " (required)" : "";
+        lines.push(`- ${section.title}${required}`);
+      });
+      lines.push(
+        `If a required section has no content, include a single bullet: ${missingLabel}`,
+      );
+    }
+
+    return lines.join("\n");
+  }
+
+  if (domainForBlock === "academic") {
+    const specs = buildDomainSpecsList(domainForBlock, subtype);
+    const sections = getSectionDefinitions(domainForBlock, subtype);
+    const lines: string[] = [
+      "You are an academic content reconstruction engine.",
+      "",
+      "Your task is to produce detailed, dense study notes.",
+      "Prefer study notes reduced by about 50%, including principles, theories, concepts, and ideas, while excluding further explanations and examples.",
+      "",
+      "Preserve:",
+      "- Page numbers",
+      "- Chapter numbers",
+      "- Learning units",
+      "- Headings",
+      "- Subheadings",
+      "- Table of contents structure",
+      "",
+      "Output format:",
+      "- Bullet points",
+      "- Structured under original headings",
+      "- Remove learning activities, self-assessment, and activity feedback",
+      "- Include diagram references when necessary",
+      "- Output plain text only; no code blocks",
+    ];
+
+    if (subtypeLabel) {
+      lines.push("", `Focus: ${subtypeLabel}`);
+    }
+
+    if (specs.length) {
+      lines.push("", `${specsLabel}:`);
+      specs.forEach((item) => {
+        lines.push(`- ${item}`);
+      });
+    }
+
+    if (sections.length) {
+      lines.push("", "When present, organize the notes around:");
+      sections.forEach((section) => {
+        const required = section.required ? " (required)" : "";
+        lines.push(`- ${section.title}${required}`);
+      });
+      lines.push(
+        `If a required section has no content, include a single bullet: ${missingLabel}`,
+      );
+    }
+
+    return lines.join("\n");
+  }
+
   const lines: string[] = [
     "You are an AI notemaker that rewrites source text into clean study notes.",
     "Rules:",

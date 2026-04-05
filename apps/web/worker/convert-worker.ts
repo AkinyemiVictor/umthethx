@@ -67,6 +67,7 @@ const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MIN_OCR_TEXT_SCORE = 5;
 const MIN_PDF_EXTRACTED_TEXT_SCORE = 15;
 const DEFAULT_MAX_DOCUMENT_PAGES = 30;
+const DEFAULT_MAX_SPLIT_PDF_PAGES = 500;
 const OCR_BASE_TARGET_PIXELS = 2200;
 const OCR_MAX_SCALE_FACTOR = 4;
 const OCR_SHARPEN_KERNEL = [
@@ -110,6 +111,10 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
 const MAX_DOCUMENT_PAGES = parsePositiveInteger(
   process.env.MAX_DOCUMENT_PAGES?.trim(),
   DEFAULT_MAX_DOCUMENT_PAGES,
+);
+const MAX_SPLIT_PDF_PAGES = parsePositiveInteger(
+  process.env.MAX_SPLIT_PDF_PAGES?.trim(),
+  Math.max(DEFAULT_MAX_SPLIT_PDF_PAGES, MAX_DOCUMENT_PAGES),
 );
 const HEAVY_WORKER_CONCURRENCY = parsePositiveInteger(
   process.env.HEAVY_WORKER_CONCURRENCY?.trim() ||
@@ -169,6 +174,59 @@ const sanitizeFileName = (fileName: string) => {
     .replace(/^[-.]+/, "")
     .trim();
   return cleaned.length > 0 ? cleaned : "file";
+};
+
+type PdfPageRange = {
+  start: number;
+  end: number;
+};
+
+const parsePdfPageRanges = (
+  rangeText: string,
+  totalPages: number,
+): PdfPageRange[] => {
+  const normalized = rangeText.replace(/\r?\n/g, ",").replace(/\s+/g, "");
+  const ranges = normalized.split(",");
+  const parsedRanges: PdfPageRange[] = [];
+
+  for (const rawRange of ranges) {
+    if (!rawRange) {
+      continue;
+    }
+
+    let start: number;
+    let end: number;
+
+    if (rawRange.includes("-")) {
+      const parts = rawRange.split("-");
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        throw new Error(`Invalid page range: ${rawRange}`);
+      }
+      start = Number.parseInt(parts[0], 10);
+      end = Number.parseInt(parts[1], 10);
+    } else {
+      start = Number.parseInt(rawRange, 10);
+      end = start;
+    }
+
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start < 1 ||
+      end > totalPages ||
+      start > end
+    ) {
+      throw new Error(`Invalid page range: ${rawRange}`);
+    }
+
+    parsedRanges.push({ start, end });
+  }
+
+  if (parsedRanges.length === 0) {
+    throw new Error("No valid page ranges were provided.");
+  }
+
+  return parsedRanges;
 };
 
 const stripExtension = (fileName: string) => {
@@ -1725,6 +1783,7 @@ const processJob = async (
   if (!converter) {
     throw new Error("Unknown converter slug.");
   }
+  const jobOptions = job.options ?? {};
 
   const workDir = await mkdtemp(path.join(tmpdir(), `umthethx-${jobId}-`));
   const inputDir = path.join(workDir, "inputs");
@@ -2063,15 +2122,20 @@ const processJob = async (
     const bytes = await readFile(input.localPath);
     const pdfDoc = await PDFDocument.load(bytes);
     const pageCount = pdfDoc.getPageCount();
-    if (pageCount > MAX_DOCUMENT_PAGES) {
+    if (pageCount > MAX_SPLIT_PDF_PAGES) {
       throw new Error(
-        `${input.filename} has ${pageCount} pages. Maximum allowed is ${MAX_DOCUMENT_PAGES} pages per document. Please use our Document Splitter to split the file and finish the job.`,
+        `${input.filename} has ${pageCount} pages. Maximum allowed for PDF Splitter is ${MAX_SPLIT_PDF_PAGES} pages per document.`,
       );
     }
     if (pageCount === 0) {
       throw new Error("No pages found.");
     }
-    if (pageCount === 1) {
+
+    const requestedRanges = jobOptions.pageRanges?.trim()
+      ? parsePdfPageRanges(jobOptions.pageRanges, pageCount)
+      : null;
+
+    if (pageCount === 1 && !requestedRanges) {
       const singleDoc = await PDFDocument.create();
       const [page] = await singleDoc.copyPages(pdfDoc, [0]);
       if (!page) {
@@ -2088,22 +2152,33 @@ const processJob = async (
       return;
     }
 
+    const ranges =
+      requestedRanges ??
+      Array.from({ length: pageCount }, (_, index) => ({
+        start: index + 1,
+        end: index + 1,
+      }));
+
     const pageDir = path.join(
       outputDir,
       `${sanitizeFileName(input.baseName)}-pages`,
     );
     await ensureDir(pageDir);
     const pageFiles: string[] = [];
-    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+    for (const range of ranges) {
       const splitDoc = await PDFDocument.create();
-      const [page] = await splitDoc.copyPages(pdfDoc, [pageIndex]);
-      if (!page) {
+      const pageIndexes = Array.from(
+        { length: range.end - range.start + 1 },
+        (_, index) => range.start - 1 + index,
+      );
+      const pages = await splitDoc.copyPages(pdfDoc, pageIndexes);
+      if (!pages.length) {
         continue;
       }
-      splitDoc.addPage(page);
+      pages.forEach((page) => splitDoc.addPage(page));
       const outputPath = path.join(
         pageDir,
-        `${sanitizeFileName(input.baseName)}-page-${pageIndex + 1}.pdf`,
+        `${sanitizeFileName(input.baseName)}-pages-${range.start}-to-${range.end}.pdf`,
       );
       const pdfBytes = await splitDoc.save();
       await writeFile(outputPath, pdfBytes);
@@ -2112,6 +2187,18 @@ const processJob = async (
 
     if (pageFiles.length === 0) {
       throw new Error("No pages split.");
+    }
+
+    if (pageFiles.length === 1) {
+      const single = pageFiles[0];
+      if (!single) {
+        throw new Error("No pages split.");
+      }
+      await addOutput(
+        single,
+        `${sanitizeFileName(input.baseName)}-pages-${ranges[0]?.start ?? 1}-to-${ranges[0]?.end ?? 1}.pdf`,
+      );
+      return;
     }
 
     const zipPath = path.join(
