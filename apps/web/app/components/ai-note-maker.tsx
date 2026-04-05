@@ -52,6 +52,157 @@ const formatBytes = (size: number) => {
   return `${mb.toFixed(1)} MB`;
 };
 
+type InlineToken = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+};
+
+type NoteBlock =
+  | { type: "blank"; key: string }
+  | {
+      type: "h1" | "h2" | "h3" | "p" | "ul" | "ol";
+      key: string;
+      text: string;
+      order?: number;
+    };
+
+const parseInlineTokens = (value: string): InlineToken[] => {
+  const tokens: InlineToken[] = [];
+  let index = 0;
+
+  while (index < value.length) {
+    if (value.startsWith("**", index)) {
+      const end = value.indexOf("**", index + 2);
+      if (end !== -1) {
+        const text = value.slice(index + 2, end);
+        if (text) {
+          tokens.push({ text, bold: true });
+        }
+        index = end + 2;
+        continue;
+      }
+    }
+
+    if (value.startsWith("*", index)) {
+      const end = value.indexOf("*", index + 1);
+      if (end !== -1) {
+        const text = value.slice(index + 1, end);
+        if (text) {
+          tokens.push({ text, italic: true });
+        }
+        index = end + 1;
+        continue;
+      }
+    }
+
+    const nextBold = value.indexOf("**", index);
+    const nextItalic = value.indexOf("*", index);
+    const nextMarker = [nextBold, nextItalic]
+      .filter((position) => position !== -1)
+      .reduce((smallest, position) => Math.min(smallest, position), value.length);
+    if (nextMarker === index) {
+      if (value.startsWith("**", index)) {
+        tokens.push({ text: "**" });
+        index += 2;
+        continue;
+      }
+      tokens.push({ text: value[index] ?? "" });
+      index += 1;
+      continue;
+    }
+    const text = value.slice(index, nextMarker);
+    if (text) {
+      tokens.push({ text });
+    }
+    index = nextMarker;
+  }
+
+  return tokens;
+};
+
+const stripInlineMarkdown = (value: string) =>
+  value.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1");
+
+const parseNoteBlocks = (value: string): NoteBlock[] =>
+  value
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line, index) => {
+      const trimmed = line.trim();
+      const key = `${index}-${trimmed.slice(0, 24)}`;
+
+      if (!trimmed) {
+        return { type: "blank", key } satisfies NoteBlock;
+      }
+
+      if (/^###\s+/.test(trimmed)) {
+        return {
+          type: "h3",
+          key,
+          text: trimmed.replace(/^###\s+/, ""),
+        } satisfies NoteBlock;
+      }
+
+      if (/^##\s+/.test(trimmed)) {
+        return {
+          type: "h2",
+          key,
+          text: trimmed.replace(/^##\s+/, ""),
+        } satisfies NoteBlock;
+      }
+
+      if (/^#\s+/.test(trimmed)) {
+        return {
+          type: "h1",
+          key,
+          text: trimmed.replace(/^#\s+/, ""),
+        } satisfies NoteBlock;
+      }
+
+      const orderedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+      if (orderedMatch) {
+        return {
+          type: "ol",
+          key,
+          order: Number(orderedMatch[1]),
+          text: orderedMatch[2] ?? "",
+        } satisfies NoteBlock;
+      }
+
+      if (/^[-*]\s+/.test(trimmed)) {
+        return {
+          type: "ul",
+          key,
+          text: trimmed.replace(/^[-*]\s+/, ""),
+        } satisfies NoteBlock;
+      }
+
+      return {
+        type: "p",
+        key,
+        text: trimmed,
+      } satisfies NoteBlock;
+    });
+
+const renderInlineTokens = (value: string) =>
+  parseInlineTokens(value).map((token, index) => {
+    if (token.bold && token.italic) {
+      return (
+        <strong key={index} className="italic">
+          {token.text}
+        </strong>
+      );
+    }
+    if (token.bold) {
+      return <strong key={index}>{token.text}</strong>;
+    }
+    if (token.italic) {
+      return <em key={index}>{token.text}</em>;
+    }
+    return <span key={index}>{token.text}</span>;
+  });
+
 export function AiNoteMakerWorkspace() {
   const t = useTranslations();
   const searchParams = useSearchParams();
@@ -75,6 +226,7 @@ export function AiNoteMakerWorkspace() {
   const hasNotes = Boolean(notes.trim().length);
 
   const copyText = useMemo(() => notes.trim(), [notes]);
+  const noteBlocks = useMemo(() => parseNoteBlocks(notes.trim()), [notes]);
 
   const resetNotes = () => {
     setNotes("");
@@ -276,6 +428,7 @@ export function AiNoteMakerWorkspace() {
     if (!notes.trim()) return;
     const baseName = "notes";
     const filename = `${baseName}.${downloadFormat}`;
+    const blocks = noteBlocks.length ? noteBlocks : parseNoteBlocks(notes.trim());
     const downloadBlob = (blob: Blob) => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -296,12 +449,75 @@ export function AiNoteMakerWorkspace() {
 
     if (downloadFormat === "docx") {
       import("docx")
-        .then(async ({ Document, Packer, Paragraph }) => {
-          const lines = notes.split("\n").map((line) => line.trimEnd());
+        .then(
+          async ({
+            Document,
+            HeadingLevel,
+            Packer,
+            Paragraph,
+            TextRun,
+          }) => {
+          const buildRuns = (text: string) =>
+            parseInlineTokens(text).map(
+              (token) =>
+                new TextRun({
+                  text: token.text,
+                  bold: token.bold,
+                  italics: token.italic,
+                }),
+            );
+
+          const children = blocks.map((block) => {
+            if (block.type === "blank") {
+              return new Paragraph({ text: "" });
+            }
+            if (block.type === "h1") {
+              return new Paragraph({
+                heading: HeadingLevel.HEADING_1,
+                spacing: { before: 120, after: 120 },
+                children: buildRuns(block.text),
+              });
+            }
+            if (block.type === "h2") {
+              return new Paragraph({
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 100, after: 80 },
+                children: buildRuns(block.text),
+              });
+            }
+            if (block.type === "h3") {
+              return new Paragraph({
+                heading: HeadingLevel.HEADING_3,
+                spacing: { before: 80, after: 60 },
+                children: buildRuns(block.text),
+              });
+            }
+            if (block.type === "ul") {
+              return new Paragraph({
+                bullet: { level: 0 },
+                spacing: { after: 60 },
+                children: buildRuns(block.text),
+              });
+            }
+            if (block.type === "ol") {
+              return new Paragraph({
+                spacing: { after: 60 },
+                children: [
+                  new TextRun({ text: `${block.order}. ` }),
+                  ...buildRuns(block.text),
+                ],
+              });
+            }
+            return new Paragraph({
+              spacing: { after: 80 },
+              children: buildRuns(block.text),
+            });
+          });
+
           const doc = new Document({
             sections: [
               {
-                children: lines.map((line) => new Paragraph(line || " ")),
+                children,
               },
             ],
           });
@@ -318,48 +534,130 @@ export function AiNoteMakerWorkspace() {
     import("pdf-lib")
       .then(async ({ PDFDocument, StandardFonts }) => {
         const pdfDoc = await PDFDocument.create();
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const fontSize = 11;
-        const lineHeight = 14;
+        const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
         const margin = 50;
-        const maxWidth = 495;
         let page = pdfDoc.addPage();
-        let { height } = page.getSize();
+        let { height, width } = page.getSize();
         let cursorY = height - margin;
 
-        const writeLine = (line: string) => {
-          if (cursorY < margin) {
+        const ensureSpace = (requiredHeight: number) => {
+          if (cursorY < margin + requiredHeight) {
             page = pdfDoc.addPage();
-            height = page.getSize().height;
+            const nextSize = page.getSize();
+            height = nextSize.height;
+            width = nextSize.width;
             cursorY = height - margin;
           }
-          page.drawText(line, { x: margin, y: cursorY, size: fontSize, font });
-          cursorY -= lineHeight;
         };
 
-        const wrapLine = (line: string) => {
-          if (!line) {
-            writeLine(" ");
+        const drawWrappedText = ({
+          text,
+          font,
+          fontSize,
+          indent = 0,
+          spacingAfter = 8,
+        }: {
+          text: string;
+          font: typeof regularFont;
+          fontSize: number;
+          indent?: number;
+          spacingAfter?: number;
+        }) => {
+          if (!text.trim()) {
+            cursorY -= spacingAfter;
             return;
           }
-          const words = line.split(/\s+/);
+          const lineHeight = fontSize + 4;
+          const maxWidth = width - margin * 2 - indent;
+          const words = text.split(/\s+/);
           let buffer = "";
+          const flush = () => {
+            if (!buffer) return;
+            ensureSpace(lineHeight);
+            page.drawText(buffer, {
+              x: margin + indent,
+              y: cursorY,
+              size: fontSize,
+              font,
+            });
+            cursorY -= lineHeight;
+            buffer = "";
+          };
+
           words.forEach((word) => {
             const next = buffer ? `${buffer} ${word}` : word;
             const width = font.widthOfTextAtSize(next, fontSize);
             if (width > maxWidth && buffer) {
-              writeLine(buffer);
+              flush();
               buffer = word;
             } else {
               buffer = next;
             }
           });
-          if (buffer) {
-            writeLine(buffer);
-          }
+          flush();
+          cursorY -= spacingAfter;
         };
 
-        notes.split("\n").forEach((line) => wrapLine(line));
+        blocks.forEach((block) => {
+          if (block.type === "blank") {
+            cursorY -= 4;
+            return;
+          }
+          if (block.type === "h1") {
+            drawWrappedText({
+              text: stripInlineMarkdown(block.text),
+              font: boldFont,
+              fontSize: 18,
+              spacingAfter: 10,
+            });
+            return;
+          }
+          if (block.type === "h2") {
+            drawWrappedText({
+              text: stripInlineMarkdown(block.text),
+              font: boldFont,
+              fontSize: 14,
+              spacingAfter: 8,
+            });
+            return;
+          }
+          if (block.type === "h3") {
+            drawWrappedText({
+              text: stripInlineMarkdown(block.text),
+              font: boldFont,
+              fontSize: 12,
+              spacingAfter: 6,
+            });
+            return;
+          }
+          if (block.type === "ul") {
+            drawWrappedText({
+              text: `- ${stripInlineMarkdown(block.text)}`,
+              font: regularFont,
+              fontSize: 11,
+              indent: 10,
+              spacingAfter: 4,
+            });
+            return;
+          }
+          if (block.type === "ol") {
+            drawWrappedText({
+              text: `${block.order}. ${stripInlineMarkdown(block.text)}`,
+              font: regularFont,
+              fontSize: 11,
+              indent: 10,
+              spacingAfter: 4,
+            });
+            return;
+          }
+          drawWrappedText({
+            text: stripInlineMarkdown(block.text),
+            font: regularFont,
+            fontSize: 11,
+            spacingAfter: 6,
+          });
+        });
         const pdfBytes = await pdfDoc.save();
         const pdfBuffer = new ArrayBuffer(pdfBytes.byteLength);
         new Uint8Array(pdfBuffer).set(pdfBytes);
@@ -427,11 +725,68 @@ export function AiNoteMakerWorkspace() {
             </div>
           </div>
           <div className="mt-3">
-            <textarea
-              readOnly
-              className="h-[420px] w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-700 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)] dark:text-[var(--foreground)]"
-              value={notes}
-            />
+            <div className="max-h-[420px] overflow-y-auto rounded-xl border border-zinc-200 bg-white px-4 py-4 dark:border-[var(--border-2)] dark:bg-[var(--surface-3)]">
+              <article className="space-y-3 text-sm leading-6 text-zinc-700 dark:text-[var(--foreground)]">
+                {noteBlocks.map((block) => {
+                  if (block.type === "blank") {
+                    return <div key={block.key} className="h-1.5" />;
+                  }
+                  if (block.type === "h1") {
+                    return (
+                      <h1
+                        key={block.key}
+                        className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-[var(--foreground)]"
+                      >
+                        {renderInlineTokens(block.text)}
+                      </h1>
+                    );
+                  }
+                  if (block.type === "h2") {
+                    return (
+                      <h2
+                        key={block.key}
+                        className="pt-2 text-lg font-bold text-zinc-900 dark:text-[var(--foreground)]"
+                      >
+                        {renderInlineTokens(block.text)}
+                      </h2>
+                    );
+                  }
+                  if (block.type === "h3") {
+                    return (
+                      <h3
+                        key={block.key}
+                        className="pt-1 text-sm font-semibold uppercase tracking-[0.16em] text-zinc-600 dark:text-[var(--muted)]"
+                      >
+                        {renderInlineTokens(block.text)}
+                      </h3>
+                    );
+                  }
+                  if (block.type === "ul") {
+                    return (
+                      <div key={block.key} className="flex items-start gap-3">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand-500)]" />
+                        <div className="min-w-0 flex-1">{renderInlineTokens(block.text)}</div>
+                      </div>
+                    );
+                  }
+                  if (block.type === "ol") {
+                    return (
+                      <div key={block.key} className="flex items-start gap-3">
+                        <span className="min-w-[1.75rem] shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-[var(--muted-2)]">
+                          {block.order}.
+                        </span>
+                        <div className="min-w-0 flex-1">{renderInlineTokens(block.text)}</div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <p key={block.key} className="text-sm leading-6 text-zinc-700 dark:text-[var(--foreground)]">
+                      {renderInlineTokens(block.text)}
+                    </p>
+                  );
+                })}
+              </article>
+            </div>
           </div>
         </div>
       ) : (

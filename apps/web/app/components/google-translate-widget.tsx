@@ -52,14 +52,23 @@ const LANGUAGE_OPTIONS: LanguageOption[] = [
   { code: "ja", label: "Japanese" },
   { code: "ko", label: "Korean" },
   { code: "pt", label: "Portuguese" },
+  { code: "nso", label: "Sepedi" },
   { code: "ru", label: "Russian" },
   { code: "es", label: "Spanish" },
+  { code: "st", label: "Sotho" },
+  { code: "nr", label: "Southern Ndebele" },
   { code: "sw", label: "Swahili" },
+  { code: "ss", label: "Swazi" },
   { code: "tr", label: "Turkish" },
+  { code: "ts", label: "Tsonga" },
+  { code: "tn", label: "Tswana" },
   { code: "uk", label: "Ukrainian" },
   { code: "ur", label: "Urdu" },
+  { code: "ve", label: "Venda" },
   { code: "vi", label: "Vietnamese" },
+  { code: "xh", label: "Xhosa" },
   { code: "yo", label: "Yoruba" },
+  { code: "zu", label: "Zulu" },
 ];
 
 const setGoogleTranslateCookie = (value: string | null) => {

@@ -66,6 +66,20 @@ const MIN_WORDS = 30;
 const REDUCTION_RATIO = 0.5;
 const MAX_FILES = 5;
 
+const nowMs = () => performance.now();
+
+const formatDurationMs = (value: number) => `${value.toFixed(1)}ms`;
+
+const logNoteMakerTiming = (
+  requestId: string,
+  stage: string,
+  data: Record<string, string | number | boolean | null | undefined>,
+) => {
+  console.info(
+    `[ai-notemaker][${requestId}] ${stage} ${JSON.stringify(data)}`,
+  );
+};
+
 const ACCEPTED_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
 const ACCEPTED_MIME_TYPES = new Set([
   "application/pdf",
@@ -1228,6 +1242,77 @@ const DOMAIN_TITLES: Record<Exclude<DomainKey, "smart">, string> = {
   media: "Media Notes",
 };
 
+const markdownHeading = (level: number, title: string) =>
+  `${"#".repeat(Math.max(1, Math.min(3, level)))} **${title
+    .replace(/\*\*/g, "")
+    .trim()}**`;
+
+const formatMarkdownBullet = (value: string) => {
+  const normalized = value.trim();
+  if (!normalized) return normalized;
+  const emphasized = normalized.replace(
+    /^(CASE|LEGISLATION|DIAGRAM):\s*/i,
+    (_, label: string) => `**${label.toUpperCase()}:** `,
+  );
+  if (isCitationLine(normalized)) {
+    return `*${emphasized.replace(/^\*+|\*+$/g, "").trim()}*`;
+  }
+  return emphasized;
+};
+
+const buildNoteTitle = ({
+  domainForBlock,
+  subtypeLabel,
+  detectedField,
+}: {
+  domainForBlock: Exclude<DomainKey, "general" | "smart"> | null;
+  subtypeLabel?: string;
+  detectedField?: Exclude<DomainKey, "smart">;
+}) => {
+  const baseDomain =
+    domainForBlock ??
+    (detectedField && detectedField !== "general" ? detectedField : "general");
+  const baseTitle = DOMAIN_TITLES[baseDomain];
+  const cleanSubtype = subtypeLabel?.trim();
+  if (cleanSubtype && domainForBlock) {
+    return `${baseTitle} - ${cleanSubtype}`;
+  }
+  return baseTitle;
+};
+
+const normalizeMarkdownNotes = (value: string) =>
+  value.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+const ensureMarkdownTitle = (value: string, title: string) => {
+  const normalized = normalizeMarkdownNotes(value);
+  if (!normalized) return normalized;
+  const firstContentLine = normalized
+    .split("\n")
+    .find((line) => line.trim().length > 0);
+  if (firstContentLine && /^#\s+/.test(firstContentLine.trim())) {
+    return normalized;
+  }
+  return `${markdownHeading(1, title)}\n\n${normalized}`;
+};
+
+const buildFormattingStandard = (title: string) => [
+  "",
+  "Formatting standard:",
+  `- Start the document with one H1 title in this style: ${markdownHeading(1, title)}. Use a more specific source title only when it is clearly better.`,
+  "- Format major sections as H2 in this style: ## **Section Heading**.",
+  "- Format subsections as H3 in this style: ### **Subheading**.",
+  "- Leave a blank line after headings and between sections.",
+  "- Rewrite unclear or messy sentences for clarity while preserving meaning.",
+  "- Keep body paragraphs short, readable, and professionally punctuated.",
+  "- Bold important keywords or concepts with Markdown bold where helpful.",
+  "- Use bullet points for unordered content and numbered lists for steps or ordered sequences.",
+  "- Italicize references and citations with Markdown italics.",
+  "- Keep formatting consistent across the entire document.",
+  "- Return only the final formatted Markdown document.",
+  "- Do not include code fences, explanations, or comments about formatting.",
+  "- Make the final document read like premium study notes on mobile and desktop.",
+];
+
 const countKeywordHitsWithTokens = (
   keywords: string[],
   textLower: string,
@@ -1514,13 +1599,12 @@ const buildSectionBullets = (section: Section) => {
 const buildNotesFromSections = (sections: Section[]) => {
   const lines: string[] = [];
   const pushSection = (section: Section, depth: number) => {
-    const indent = depth > 0 ? "  ".repeat(depth - 1) : "";
     if (section.title) {
-      lines.push(`${indent}${section.title}`);
+      lines.push(markdownHeading(depth <= 1 ? 2 : 3, section.title));
     }
     const bullets = buildSectionBullets(section);
     bullets.forEach((bullet) => {
-      lines.push(`${indent}- ${bullet}`);
+      lines.push(`- ${formatMarkdownBullet(bullet)}`);
     });
     section.children.forEach((child) => {
       const beforeLength = lines.length;
@@ -1702,6 +1786,10 @@ const buildLlmInstructions = ({
   missingLabel,
 }: Omit<LlmRequest, "text">) => {
   if (domainForBlock === "legal") {
+    const title = buildNoteTitle({
+      domainForBlock,
+      subtypeLabel,
+    });
     const specs = buildDomainSpecsList(domainForBlock, subtype);
     const sections = getSectionDefinitions(domainForBlock, subtype);
     const lines: string[] = [
@@ -1774,8 +1862,27 @@ const buildLlmInstructions = ({
       "- Highlight legislation and cases",
       "- Remove learning activities, self-assessment, and activity feedback",
       "- Include diagram references when necessary",
-      "- Output plain text only; no code blocks",
     ];
+
+    lines.push(
+      "",
+      "Use this H2 section order:",
+      "- Paragraph-by-Paragraph Summary",
+      "- Case Note (FIRAC)",
+      "- Legal Opinion",
+      "- Judicial Citations",
+      "- Legislative Authorities",
+      "- Analytical Essay on Cited Authorities",
+      "- Binding Principles from the Judgment",
+      "- Study Notes",
+      "",
+      "Within Case Note (FIRAC), use these H3 subsections in order:",
+      "- Facts",
+      "- Issues",
+      "- Rules",
+      "- Application",
+      "- Conclusion",
+    );
 
     if (subtypeLabel) {
       lines.push("", `Focus: ${subtypeLabel}`);
@@ -1799,10 +1906,15 @@ const buildLlmInstructions = ({
       );
     }
 
+    lines.push(...buildFormattingStandard(title));
     return lines.join("\n");
   }
 
   if (domainForBlock === "academic") {
+    const title = buildNoteTitle({
+      domainForBlock,
+      subtypeLabel,
+    });
     const specs = buildDomainSpecsList(domainForBlock, subtype);
     const sections = getSectionDefinitions(domainForBlock, subtype);
     const lines: string[] = [
@@ -1824,7 +1936,6 @@ const buildLlmInstructions = ({
       "- Structured under original headings",
       "- Remove learning activities, self-assessment, and activity feedback",
       "- Include diagram references when necessary",
-      "- Output plain text only; no code blocks",
     ];
 
     if (subtypeLabel) {
@@ -1849,9 +1960,14 @@ const buildLlmInstructions = ({
       );
     }
 
+    lines.push(...buildFormattingStandard(title));
     return lines.join("\n");
   }
 
+  const title = buildNoteTitle({
+    domainForBlock,
+    subtypeLabel,
+  });
   const lines: string[] = [
     "You are an AI notemaker that rewrites source text into clean study notes.",
     "Rules:",
@@ -1862,7 +1978,6 @@ const buildLlmInstructions = ({
     "- Remove activities, exercises, and examples unless they contain a case, law, or diagram reference.",
     "- Shorten the text to roughly 50% while keeping key facts.",
     "- For legal content, prefix case citations with CASE: and laws with LEGISLATION:.",
-    "- Output plain text only; no code blocks.",
   ];
 
   if (domainForBlock) {
@@ -1894,10 +2009,60 @@ const buildLlmInstructions = ({
     lines.push("Then add the rest of the notes after a blank line.");
   }
 
+  lines.push(...buildFormattingStandard(title));
   return lines.join("\n");
 };
 
 const buildLlmInput = (text: string) => `Document text:\n${text}`;
+
+const convertPlainNotesToMarkdown = (value: string, defaultTitle: string) => {
+  const normalized = normalizeMarkdownNotes(value);
+  if (!normalized) return normalized;
+
+  const lines = normalized.split("\n");
+  const output: string[] = [];
+  let sawTitle = false;
+
+  lines.forEach((rawLine) => {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      if (output[output.length - 1] !== "") {
+        output.push("");
+      }
+      return;
+    }
+
+    if (/^#{1,3}\s+/.test(trimmed)) {
+      output.push(trimmed);
+      sawTitle = true;
+      return;
+    }
+
+    const orderedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+    if (orderedMatch) {
+      output.push(`${orderedMatch[1]}. ${orderedMatch[2]}`);
+      return;
+    }
+
+    if (/^[-*]\s+/.test(trimmed)) {
+      output.push(`- ${formatMarkdownBullet(trimmed.replace(/^[-*]\s+/, ""))}`);
+      return;
+    }
+
+    if (!sawTitle) {
+      output.push(markdownHeading(1, trimmed || defaultTitle));
+      sawTitle = true;
+      return;
+    }
+
+    if (output[output.length - 1] !== "") {
+      output.push("");
+    }
+    output.push(markdownHeading(2, trimmed));
+  });
+
+  return ensureMarkdownTitle(output.join("\n"), defaultTitle);
+};
 
 const generateNotesWithLlm = async (request: LlmRequest) => {
   const config = getOpenAiConfig();
@@ -1940,6 +2105,8 @@ const generateNotesWithLlm = async (request: LlmRequest) => {
 };
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID().slice(0, 8);
+  const requestStartedAt = nowMs();
   const contentType = request.headers.get("content-type") ?? "";
   let text = "";
   let mode: DomainKey = "general";
@@ -2053,9 +2220,12 @@ export async function POST(request: Request) {
     chunks.push(trimmedText);
   }
 
+  let extractionTotalMs = 0;
+
   for (const file of files) {
     const ext = getFileExtension(file.name);
     let extracted = "";
+    const extractionStartedAt = nowMs();
     try {
       if (ext === "pdf") {
         extracted = await extractTextFromPdf(file);
@@ -2080,8 +2250,17 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    const extractionMs = nowMs() - extractionStartedAt;
+    extractionTotalMs += extractionMs;
 
     const cleaned = normalizeWhitespace(extracted);
+    logNoteMakerTiming(requestId, "file_extraction", {
+      file: file.name,
+      ext: ext || file.type || "unknown",
+      inputBytes: file.size,
+      extractedChars: cleaned.length,
+      durationMs: formatDurationMs(extractionMs),
+    });
     if (cleaned) {
       chunks.push(`Document: ${file.name}\n${cleaned}`);
     }
@@ -2115,7 +2294,21 @@ export async function POST(request: Request) {
   }
 
   const blockSubtypeLabel = subtypeLabel || subtype;
+  const noteTitle = buildNoteTitle({
+    domainForBlock,
+    subtypeLabel: blockSubtypeLabel,
+    detectedField: field,
+  });
+  logNoteMakerTiming(requestId, "input_ready", {
+    mode,
+    detectedField: field ?? null,
+    fileCount: files.length,
+    combinedChars: combined.length,
+    combinedWords: countWords(combined),
+    extractionMs: formatDurationMs(extractionTotalMs),
+  });
   let llmNotes: string | null = null;
+  const llmStartedAt = nowMs();
   try {
     llmNotes = await generateNotesWithLlm({
       text: combined,
@@ -2128,11 +2321,34 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("OpenAI summarization failed:", error);
   }
+  const llmMs = nowMs() - llmStartedAt;
+  logNoteMakerTiming(requestId, "llm_generation", {
+    used: Boolean(llmNotes),
+    durationMs: formatDurationMs(llmMs),
+    outputChars: llmNotes?.length ?? 0,
+  });
 
   if (llmNotes) {
-    return NextResponse.json({ notes: llmNotes, field });
+    const formatStartedAt = nowMs();
+    const formattedNotes = ensureMarkdownTitle(llmNotes, noteTitle);
+    const formatMs = nowMs() - formatStartedAt;
+    logNoteMakerTiming(requestId, "post_formatting", {
+      source: "llm",
+      durationMs: formatDurationMs(formatMs),
+      outputChars: formattedNotes.length,
+    });
+    logNoteMakerTiming(requestId, "request_complete", {
+      mode,
+      source: "llm",
+      totalMs: formatDurationMs(nowMs() - requestStartedAt),
+    });
+    return NextResponse.json({
+      notes: formattedNotes,
+      field,
+    });
   }
 
+  const fallbackStartedAt = nowMs();
   const baseNotes = buildNotes(combined).notes;
   const domainBlock = domainForBlock
     ? buildDomainBlock(
@@ -2144,7 +2360,21 @@ export async function POST(request: Request) {
         missingLabel,
       )
     : "";
-  const notes = domainBlock ? `${domainBlock}\n\n${baseNotes}` : baseNotes;
+  const notes = convertPlainNotesToMarkdown(
+    domainBlock ? `${domainBlock}\n\n${baseNotes}` : baseNotes,
+    noteTitle,
+  );
+  const fallbackMs = nowMs() - fallbackStartedAt;
+  logNoteMakerTiming(requestId, "post_formatting", {
+    source: "fallback",
+    durationMs: formatDurationMs(fallbackMs),
+    outputChars: notes.length,
+  });
+  logNoteMakerTiming(requestId, "request_complete", {
+    mode,
+    source: "fallback",
+    totalMs: formatDurationMs(nowMs() - requestStartedAt),
+  });
 
   return NextResponse.json({ notes, field });
 }
