@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { LanguageProvider } from "./components/language-provider";
 import { PageAds } from "./components/page-ads";
+import { ADSENSE_CLIENT_ID, ADSENSE_ENABLED } from "./lib/adsense";
 import { getCurrentLanguage } from "./lib/i18n";
 import { getCurrentMarket } from "./lib/markets";
 import { defaultMetadata } from "./lib/seo";
@@ -39,6 +40,10 @@ export default async function RootLayout({
     process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-V1H324ZER7";
   const shouldEnableAnalytics =
     process.env.NODE_ENV === "production" && Boolean(gaMeasurementId);
+  const shouldEnableAdSense =
+    process.env.NODE_ENV === "production" &&
+    ADSENSE_ENABLED &&
+    Boolean(ADSENSE_CLIENT_ID);
   const lang = await getCurrentLanguage();
   const market = await getCurrentMarket();
   const messages = getMessages(lang);
@@ -65,6 +70,13 @@ export default async function RootLayout({
               `}
             </Script>
           </>
+        ) : null}
+        {shouldEnableAdSense ? (
+          <Script
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
+            strategy="afterInteractive"
+            crossOrigin="anonymous"
+          />
         ) : null}
         <LanguageProvider lang={lang} messages={messages}>
           <PageAds label={t("ads.label")} text={t("ads.text")}>

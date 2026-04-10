@@ -136,7 +136,11 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
         </section>
 
         {showAds ? (
-          <AdSlot label={t("ads.label")} text={t("ads.text")} />
+          <AdSlot
+            label={t("ads.label")}
+            text={t("ads.text")}
+            slot="converter-inline"
+          />
         ) : null}
 
         <HowItWorksSection
@@ -237,7 +241,11 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
         />
 
         {showAds ? (
-          <AdSlot label={t("ads.label")} text={t("ads.text")} />
+          <AdSlot
+            label={t("ads.label")}
+            text={t("ads.text")}
+            slot="converter-footer"
+          />
         ) : null}
 
         <SiteFooter footerConverters={footerConverters} />
