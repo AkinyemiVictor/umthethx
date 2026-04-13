@@ -15,7 +15,7 @@ import {
   type MarketCode,
 } from "../../src/lib/markets";
 
-const DEFAULT_SITE_URL = "https://umthethx.com";
+const DEFAULT_SITE_URL = "https://www.umthethx.online";
 const DEFAULT_OG_IMAGE = "/apple-touch-icon.png";
 
 const formatLabelMap: Record<string, string> = {
