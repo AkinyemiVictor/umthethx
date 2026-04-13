@@ -63,7 +63,7 @@ Web-only:
 - `OPENAI_MODEL` optional override
 - `NEXT_PUBLIC_GA_MEASUREMENT_ID` optional analytics
 - `NEXT_PUBLIC_ADSENSE_ENABLED` default `true`
-- `NEXT_PUBLIC_ADSENSE_CLIENT` AdSense publisher ID. The web app currently defaults to `ca-pub-8196004052665772`.
+- `NEXT_PUBLIC_ADSENSE_CLIENT` AdSense publisher ID. The web app currently defaults to `ca-pub-1041444647484987`.
 - `NEXT_PUBLIC_ADSENSE_SLOT_HOME_INLINE`
 - `NEXT_PUBLIC_ADSENSE_SLOT_HOME_FOOTER`
 - `NEXT_PUBLIC_ADSENSE_SLOT_CONVERTER_INLINE`

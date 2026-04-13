@@ -29,6 +29,9 @@ export const metadata: Metadata = {
     shortcut: ["/favicon.ico"],
     apple: [{ url: "/apple-touch-icon.png", type: "image/png" }],
   },
+  other: {
+    "google-adsense-account": ADSENSE_CLIENT_ID,
+  },
 };
 
 export default async function RootLayout({
@@ -51,6 +54,17 @@ export default async function RootLayout({
 
   return (
     <html lang={lang} data-market={market}>
+      <head>
+        {shouldEnableAdSense ? (
+          <Script
+            id="adsense-loader"
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
+            strategy="beforeInteractive"
+            crossOrigin="anonymous"
+            async
+          />
+        ) : null}
+      </head>
       <body
         data-market={market}
         className={`${geistSans.variable} ${geistMono.variable}`}
@@ -70,13 +84,6 @@ export default async function RootLayout({
               `}
             </Script>
           </>
-        ) : null}
-        {shouldEnableAdSense ? (
-          <Script
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
-            strategy="afterInteractive"
-            crossOrigin="anonymous"
-          />
         ) : null}
         <LanguageProvider lang={lang} messages={messages}>
           <PageAds label={t("ads.label")} text={t("ads.text")}>
