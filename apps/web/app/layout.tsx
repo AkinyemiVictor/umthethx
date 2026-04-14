@@ -29,9 +29,6 @@ export const metadata: Metadata = {
     shortcut: ["/favicon.ico"],
     apple: [{ url: "/apple-touch-icon.png", type: "image/png" }],
   },
-  other: {
-    "google-adsense-account": ADSENSE_CLIENT_ID,
-  },
 };
 
 export default async function RootLayout({
