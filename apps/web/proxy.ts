@@ -7,9 +7,22 @@ import {
   stripMarketPrefix,
 } from "./src/lib/markets";
 
+const APEX_HOST = "umthethx.online";
+const CANONICAL_HOST = "www.umthethx.online";
 const PUBLIC_FILE_PATTERN = /\.[^/]+$/;
 
 export function proxy(request: NextRequest) {
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
+  const host = hostHeader.split(",")[0]?.trim().split(":")[0]?.toLowerCase();
+
+  if (host === APEX_HOST) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.protocol = "https";
+    redirectUrl.host = CANONICAL_HOST;
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+
   const { pathname } = request.nextUrl;
 
   if (
@@ -49,6 +62,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|apple-touch-icon.png).*)",
+    "/((?!_next/static|_next/image).*)",
   ],
 };
