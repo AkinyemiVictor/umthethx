@@ -17,9 +17,10 @@ export function proxy(request: NextRequest) {
   const host = hostHeader.split(",")[0]?.trim().split(":")[0]?.toLowerCase();
 
   if (host === APEX_HOST) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.protocol = "https";
-    redirectUrl.host = CANONICAL_HOST;
+    const redirectUrl = new URL(
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      `https://${CANONICAL_HOST}`,
+    );
     return NextResponse.redirect(redirectUrl, 308);
   }
 
