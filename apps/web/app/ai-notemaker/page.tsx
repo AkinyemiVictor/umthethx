@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { AdSlot } from "../components/ad-slot";
-import { MobileRectangleAds } from "../components/mobile-rectangle-ads";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { AiNoteMakerWorkspace } from "../components/ai-note-maker";
@@ -67,12 +65,6 @@ export default async function AiNoteMakerPage() {
           <AiNoteMakerWorkspace />
         </section>
 
-        <AdSlot
-          label={t("ads.label")}
-          text={t("ads.text")}
-          slot="ai-notemaker-inline"
-        />
-
         <section className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">
@@ -101,15 +93,7 @@ export default async function AiNoteMakerPage() {
           </div>
         </section>
 
-        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
-
         <AiNoteMakerTypeGrid />
-
-        <AdSlot
-          label={t("ads.label")}
-          text={t("ads.text")}
-          slot="ai-notemaker-footer"
-        />
 
         <SiteFooter footerConverters={footerConverters} />
       </div>

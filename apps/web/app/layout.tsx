@@ -3,12 +3,11 @@ import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 import { LanguageProvider } from "./components/language-provider";
-import { PageAds } from "./components/page-ads";
 import { ADSENSE_CLIENT_ID, ADSENSE_ENABLED } from "./lib/adsense";
 import { getCurrentLanguage } from "./lib/i18n";
 import { getCurrentMarket } from "./lib/markets";
 import { defaultMetadata } from "./lib/seo";
-import { getMessages, getTranslator } from "./lib/translations";
+import { getMessages } from "./lib/translations";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -47,18 +46,15 @@ export default async function RootLayout({
   const lang = await getCurrentLanguage();
   const market = await getCurrentMarket();
   const messages = getMessages(lang);
-  const t = getTranslator(lang);
 
   return (
     <html lang={lang} data-market={market}>
       <head>
         {shouldEnableAdSense ? (
-          <Script
-            id="adsense-loader"
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
-            strategy="beforeInteractive"
-            crossOrigin="anonymous"
+          <script
             async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT_ID}`}
+            crossOrigin="anonymous"
           />
         ) : null}
       </head>
@@ -83,9 +79,7 @@ export default async function RootLayout({
           </>
         ) : null}
         <LanguageProvider lang={lang} messages={messages}>
-          <PageAds label={t("ads.label")} text={t("ads.text")}>
-            {children}
-          </PageAds>
+          {children}
         </LanguageProvider>
       </body>
     </html>

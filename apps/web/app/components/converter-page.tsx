@@ -24,10 +24,8 @@ import {
   getConverterSeoKeywords,
 } from "../lib/seo";
 import { getTranslator } from "../lib/translations";
-import { AdSlot } from "./ad-slot";
 import { ConverterWorkflow } from "./converter-workflow";
 import { HowItWorksSection } from "./how-it-works-section";
-import { MobileRectangleAds } from "./mobile-rectangle-ads";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 import { ConverterGrid } from "../../src/components/ConverterGrid";
@@ -67,7 +65,6 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
       description: t("converterPage.steps.download.description"),
     },
   ];
-  const showAds = true;
   const formatLine =
     converter.accept.extensions.length > 1
       ? t("converterPage.supportedFormatsPlural", {
@@ -135,14 +132,6 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
           />
         </section>
 
-        {showAds ? (
-          <AdSlot
-            label={t("ads.label")}
-            text={t("ads.text")}
-            slot="converter-inline"
-          />
-        ) : null}
-
         <HowItWorksSection
           title={t("converterPage.howItWorks.title")}
           description={t("converterPage.howItWorks.description")}
@@ -202,8 +191,6 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
           ) : null}
         </section>
 
-        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
-
         <section className="sr-only">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">
@@ -239,14 +226,6 @@ export async function ConverterPage({ converter }: { converter: Converter }) {
           description={t("grid.description")}
           market={market}
         />
-
-        {showAds ? (
-          <AdSlot
-            label={t("ads.label")}
-            text={t("ads.text")}
-            slot="converter-footer"
-          />
-        ) : null}
 
         <SiteFooter footerConverters={footerConverters} />
       </div>

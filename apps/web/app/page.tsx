@@ -9,8 +9,6 @@ import {
   getConverterFormats,
 } from "../src/lib/converters";
 import { ConverterWorkflow } from "./components/converter-workflow";
-import { AdSlot } from "./components/ad-slot";
-import { MobileRectangleAds } from "./components/mobile-rectangle-ads";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeader } from "./components/site-header";
 import { HowItWorksSection } from "./components/how-it-works-section";
@@ -68,7 +66,6 @@ export default async function Home() {
   const formatLine = t("converterPage.supportedFormatsPlural", {
     formats: formats.join(", "),
   });
-  const showAds = true;
   const howItWorksSteps = [
     {
       label: t("common.stepLabel", { number: 1 }),
@@ -138,16 +135,6 @@ export default async function Home() {
           </section>
         </div>
 
-        {showAds ? (
-          <AdSlot
-            slot="home-inline"
-            className="min-h-[140px]"
-            label={t("ads.label")}
-          >
-            {t("ads.text")}
-          </AdSlot>
-        ) : null}
-
         <HowItWorksSection
           title={t("home.howItWorks.title")}
           description={t("home.howItWorks.description")}
@@ -188,8 +175,6 @@ export default async function Home() {
           </div>
         </section>
 
-        <MobileRectangleAds label={t("ads.label")} text={t("ads.text")} />
-
         <section className="sr-only">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">
@@ -225,16 +210,6 @@ export default async function Home() {
           description={t("grid.description")}
           market={market}
         />
-
-        {showAds ? (
-          <AdSlot
-            slot="home-footer"
-            className="min-h-[140px]"
-            label={t("ads.label")}
-          >
-            {t("ads.text")}
-          </AdSlot>
-        ) : null}
 
         <SiteFooter footerConverters={footerConverters} />
       </div>
