@@ -73,19 +73,23 @@ Web-only:
 - `AI_NOTEMAKER_USAGE_LIMIT` default `60` NoteMaker requests per device per window
 - `AI_NOTEMAKER_IP_USAGE_LIMIT` default `120` NoteMaker requests per IP per window
 - `AI_NOTEMAKER_USAGE_WINDOW_SECONDS` default `86400` (24 hours)
+- `AI_NOTEMAKER_MAX_FILE_BYTES` default `10485760` (10 MB) per uploaded file
+- `AI_NOTEMAKER_MAX_TOTAL_UPLOAD_BYTES` default `20971520` (20 MB) across uploaded files in one NoteMaker request
+- `AI_NOTEMAKER_MAX_MULTIPART_BYTES` default `22020096` (~21 MB) request-size guard before multipart parsing
+- `AI_NOTEMAKER_MAX_COMBINED_CHARS` default `300000` extracted/input characters per NoteMaker request
 
 Worker-only optional overrides:
 
 - `MAX_DOCUMENT_PAGES`
 - `HEAVY_WORKER_CONCURRENCY` default `1` for OCR, PDF, and office-heavy jobs
-- `HEAVY_WORKER_INPUT_CONCURRENCY` default `2` files processed in parallel inside one heavy job
+- `HEAVY_WORKER_INPUT_CONCURRENCY` default `1` on Railway and `2` locally
 - `LIGHT_WORKER_CONCURRENCY` default `4` for simple image/data conversions
 - `LIGHT_WORKER_INPUT_CONCURRENCY` default `1` file at a time inside one light job
 - `CLEANUP_WORKER_CONCURRENCY` default `2`
 - `WORKER_CONCURRENCY` legacy fallback for heavy jobs if you already use it
 - `WORKER_INPUT_CONCURRENCY` legacy fallback for heavy-job file parallelism if you already use it
 - `JOB_RETENTION_MS` default `900000` (15 minutes) for temp uploads and outputs after a job finishes
-- `WORKER_MAX_JOBS` default `25` on Railway before a worker exits and restarts
+- `WORKER_MAX_JOBS` default `10` on Railway before a worker exits and restarts
 - `WORKER_INSTANCE_LABEL` optional explicit log label
 - `WORKER_KEEPALIVE_MS`
 
@@ -152,10 +156,11 @@ Important:
 - Conversion traffic is split into three BullMQ queues: heavy conversions, light conversions, and cleanup.
 - Heavy jobs include OCR, PDF, and office/document renders. Light jobs include simple image/data conversions such as format swaps and CSV to JSON.
 - Multiple Railway worker replicas are supported. With two replicas and `HEAVY_WORKER_CONCURRENCY=1`, the heavy queue can process two heavy jobs in parallel while light jobs continue independently.
-- Keep `HEAVY_WORKER_INPUT_CONCURRENCY` low, usually `2`, because OCR and PDF jobs are CPU-heavy.
+- Keep `HEAVY_WORKER_INPUT_CONCURRENCY` low, usually `1` on Railway and rarely above `2`, because OCR and PDF jobs are CPU-heavy.
+- On Railway, the worker container now exposes `global.gc()` and runs an explicit GC pass after heavy job stages. This only helps when large objects are actually dereferenced, which the worker and NoteMaker route now do more aggressively.
 - Increase `LIGHT_WORKER_CONCURRENCY` before you increase heavy concurrency if the goal is to speed up simple image-format converters.
 - Temporary uploaded files and generated outputs are now scheduled for cleanup after the retention window, and completed or failed jobs also request cleanup when the user leaves the page.
-- On Railway, each worker replica now defaults to restarting after 25 processed conversion jobs so long-lived memory growth does not accumulate indefinitely.
+- On Railway, each worker replica now defaults to restarting after 10 processed conversion jobs so long-lived memory growth does not accumulate indefinitely.
 
 ## Deployment verification
 

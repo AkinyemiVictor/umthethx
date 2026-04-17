@@ -22,5 +22,6 @@ WORKDIR /app
 COPY --from=build /app /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--expose-gc"
 
 CMD ["node", "apps/web/scripts/start-web.mjs"]

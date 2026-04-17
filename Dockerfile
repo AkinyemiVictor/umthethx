@@ -38,6 +38,7 @@ RUN python3 -m venv /opt/venv \
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV PYTHON_BIN="/opt/venv/bin/python"
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--expose-gc"
 
 WORKDIR /app
 COPY --from=build /app /app

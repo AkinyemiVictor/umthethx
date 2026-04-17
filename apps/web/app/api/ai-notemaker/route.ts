@@ -65,8 +65,63 @@ const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const MIN_WORDS = 30;
 const REDUCTION_RATIO = 0.5;
 const MAX_FILES = 5;
+const DEFAULT_MAX_FILE_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_UPLOAD_BYTES = 20 * 1024 * 1024;
+const DEFAULT_MAX_MULTIPART_BYTES = DEFAULT_MAX_TOTAL_UPLOAD_BYTES + 1024 * 1024;
+const DEFAULT_MAX_COMBINED_CHARS = 300_000;
+
+const parsePositiveInteger = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const AI_NOTEMAKER_MAX_FILE_BYTES = parsePositiveInteger(
+  process.env.AI_NOTEMAKER_MAX_FILE_BYTES?.trim(),
+  DEFAULT_MAX_FILE_BYTES,
+);
+const AI_NOTEMAKER_MAX_TOTAL_UPLOAD_BYTES = parsePositiveInteger(
+  process.env.AI_NOTEMAKER_MAX_TOTAL_UPLOAD_BYTES?.trim(),
+  DEFAULT_MAX_TOTAL_UPLOAD_BYTES,
+);
+const AI_NOTEMAKER_MAX_MULTIPART_BYTES = parsePositiveInteger(
+  process.env.AI_NOTEMAKER_MAX_MULTIPART_BYTES?.trim(),
+  Math.max(
+    DEFAULT_MAX_MULTIPART_BYTES,
+    AI_NOTEMAKER_MAX_TOTAL_UPLOAD_BYTES,
+  ),
+);
+const AI_NOTEMAKER_MAX_COMBINED_CHARS = parsePositiveInteger(
+  process.env.AI_NOTEMAKER_MAX_COMBINED_CHARS?.trim(),
+  DEFAULT_MAX_COMBINED_CHARS,
+);
 
 const nowMs = () => performance.now();
+
+const parseContentLengthHeader = (value: string | null) => {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const formatBytes = (value: number) => {
+  if (value >= 1024 * 1024) {
+    return `${Math.round(value / (1024 * 1024))} MB`;
+  }
+  if (value >= 1024) {
+    return `${Math.round(value / 1024)} KB`;
+  }
+  return `${value} bytes`;
+};
+
+const maybeRunGarbageCollection = () => {
+  const gc = (global as typeof globalThis & { gc?: () => void }).gc;
+  if (typeof gc === "function") {
+    gc();
+  }
+};
 
 const formatDurationMs = (value: number) => `${value.toFixed(1)}ms`;
 
@@ -1047,37 +1102,43 @@ const decodeXmlEntities = (value: string) =>
 
 const extractTextFromPdf = async (file: File) => {
   ensurePdfWorker();
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const parser = new PDFParse({ data: buffer });
+  let buffer: Buffer | null = Buffer.from(await file.arrayBuffer());
+  let parser: PDFParse | null = new PDFParse({ data: buffer });
   try {
     const parsed = await parser.getText();
     return parsed.text?.trim() ?? "";
   } finally {
-    await parser.destroy();
+    await parser?.destroy();
+    parser = null;
+    buffer = null;
   }
 };
 
 const extractTextFromTxt = async (file: File) => {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  return buffer.toString("utf8").trim();
+  return (await file.text()).trim();
 };
 
 const extractTextFromDocx = async (file: File) => {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const zip = await JSZip.loadAsync(buffer);
-  const docFile = zip.file("word/document.xml");
-  if (!docFile) {
-    throw new Error("DOCX document.xml not found.");
+  let buffer: Buffer | null = Buffer.from(await file.arrayBuffer());
+  let zip: JSZip | null = await JSZip.loadAsync(buffer);
+  buffer = null;
+  try {
+    const docFile = zip.file("word/document.xml");
+    if (!docFile) {
+      throw new Error("DOCX document.xml not found.");
+    }
+    const xml = await docFile.async("string");
+    const withBreaks = xml
+      .replace(/<w:p[^>]*>/g, "\n")
+      .replace(/<\/w:p>/g, "\n")
+      .replace(/<w:br[^>]*\/>/g, "\n")
+      .replace(/<w:tab[^>]*\/>/g, "\t");
+    const stripped = withBreaks.replace(/<[^>]+>/g, "");
+    const decoded = decodeXmlEntities(stripped);
+    return normalizeWhitespace(decoded);
+  } finally {
+    zip = null;
   }
-  const xml = await docFile.async("string");
-  const withBreaks = xml
-    .replace(/<w:p[^>]*>/g, "\n")
-    .replace(/<\/w:p>/g, "\n")
-    .replace(/<w:br[^>]*\/>/g, "\n")
-    .replace(/<w:tab[^>]*\/>/g, "\t");
-  const stripped = withBreaks.replace(/<[^>]+>/g, "");
-  const decoded = decodeXmlEntities(stripped);
-  return normalizeWhitespace(decoded);
 };
 
 const buildFrequencyMap = (text: string) => {
@@ -2108,6 +2169,9 @@ export async function POST(request: Request) {
   const requestId = crypto.randomUUID().slice(0, 8);
   const requestStartedAt = nowMs();
   const contentType = request.headers.get("content-type") ?? "";
+  const contentLength = parseContentLengthHeader(
+    request.headers.get("content-length"),
+  );
   let text = "";
   let mode: DomainKey = "general";
   let subtype = "";
@@ -2115,268 +2179,321 @@ export async function POST(request: Request) {
   let specsLabel = "Specs";
   let missingLabel = "Not found.";
   const files: File[] = [];
+  let shouldRunGc = false;
 
-  if (contentType.includes("multipart/form-data")) {
-    const form = await request.formData();
-    const textValue = form.get("text");
-    if (typeof textValue === "string") {
-      text = textValue;
-    }
-    const modeValue = form.get("mode");
-    if (typeof modeValue === "string") {
-      mode = normalizeMode(modeValue);
-    }
-    const subtypeValue = form.get("subtype");
-    if (typeof subtypeValue === "string") {
-      subtype = subtypeValue;
-    }
-    const subtypeLabelValue = form.get("subtypeLabel");
-    if (typeof subtypeLabelValue === "string") {
-      subtypeLabel = subtypeLabelValue;
-    }
-    const specsLabelValue = form.get("specsLabel");
-    if (typeof specsLabelValue === "string" && specsLabelValue.trim()) {
-      specsLabel = specsLabelValue.trim();
-    }
-    const missingLabelValue = form.get("missingLabel");
-    if (typeof missingLabelValue === "string" && missingLabelValue.trim()) {
-      missingLabel = missingLabelValue.trim();
-    }
-    form.getAll("files").forEach((entry) => {
-      if (entry instanceof File) {
-        files.push(entry);
-      }
-    });
-  } else {
-    try {
-      const payload = (await request.json()) as {
-        text?: string;
-        mode?: DomainKey;
-        subtype?: string;
-        subtypeLabel?: string;
-        specsLabel?: string;
-        missingLabel?: string;
-      };
-      text = payload.text ?? "";
-      mode = normalizeMode(payload.mode);
-      subtype = payload.subtype ?? "";
-      subtypeLabel = payload.subtypeLabel ?? "";
-      if (payload.specsLabel?.trim()) {
-        specsLabel = payload.specsLabel.trim();
-      }
-      if (payload.missingLabel?.trim()) {
-        missingLabel = payload.missingLabel.trim();
-      }
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid JSON payload." },
-        { status: 400 },
-      );
-    }
-  }
-
-  if (!text.trim() && files.length === 0) {
-    return NextResponse.json(
-      { error: "Provide text or upload at least one file." },
-      { status: 400 },
-    );
-  }
-
-  if (files.length > MAX_FILES) {
-    return NextResponse.json(
-      { error: `You can upload up to ${MAX_FILES} files at once.` },
-      { status: 413 },
-    );
-  }
-
-  for (const file of files) {
-    if (!isAcceptedFile(file)) {
-      return NextResponse.json(
-        { error: "Unsupported file type. Use PDF, DOCX, or TXT." },
-        { status: 415 },
-      );
-    }
-  }
-
-  const usage = await consumeUsageLimit(request, "ai-notemaker");
-  if (!usage.allowed) {
-    return NextResponse.json(
-      {
-        error: usage.message,
-        retryAfterSeconds: usage.retryAfterSeconds,
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(usage.retryAfterSeconds),
-        },
-      },
-    );
-  }
-
-  const chunks: string[] = [];
-  const trimmedText = normalizeWhitespace(text);
-  if (trimmedText) {
-    chunks.push(trimmedText);
-  }
-
-  let extractionTotalMs = 0;
-
-  for (const file of files) {
-    const ext = getFileExtension(file.name);
-    let extracted = "";
-    const extractionStartedAt = nowMs();
-    try {
-      if (ext === "pdf") {
-        extracted = await extractTextFromPdf(file);
-      } else if (ext === "docx") {
-        extracted = await extractTextFromDocx(file);
-      } else if (ext === "txt") {
-        extracted = await extractTextFromTxt(file);
-      } else if (file.type === "application/pdf") {
-        extracted = await extractTextFromPdf(file);
-      } else if (
-        file.type ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ) {
-        extracted = await extractTextFromDocx(file);
-      } else if (file.type === "text/plain") {
-        extracted = await extractTextFromTxt(file);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error.";
-      return NextResponse.json(
-        { error: `Failed to read ${file.name}: ${message}` },
-        { status: 400 },
-      );
-    }
-    const extractionMs = nowMs() - extractionStartedAt;
-    extractionTotalMs += extractionMs;
-
-    const cleaned = normalizeWhitespace(extracted);
-    logNoteMakerTiming(requestId, "file_extraction", {
-      file: file.name,
-      ext: ext || file.type || "unknown",
-      inputBytes: file.size,
-      extractedChars: cleaned.length,
-      durationMs: formatDurationMs(extractionMs),
-    });
-    if (cleaned) {
-      chunks.push(`Document: ${file.name}\n${cleaned}`);
-    }
-  }
-
-  const combined = normalizeWhitespace(chunks.join("\n\n"));
-  if (!combined) {
-    return NextResponse.json(
-      { error: "No readable text found in the provided input." },
-      { status: 400 },
-    );
-  }
-  if (countWords(combined) < MIN_WORDS) {
-    return NextResponse.json(
-      { error: `Text must be at least ${MIN_WORDS} words.` },
-      { status: 400 },
-    );
-  }
-
-  let field: Exclude<DomainKey, "smart"> | undefined;
-  let domainForBlock: Exclude<DomainKey, "general" | "smart"> | null = null;
-
-  if (mode === "smart") {
-    const detected = detectDomain(combined);
-    field = detected;
-    if (detected !== "general") {
-      domainForBlock = detected;
-    }
-  } else if (mode !== "general") {
-    domainForBlock = mode as Exclude<DomainKey, "general" | "smart">;
-  }
-
-  const blockSubtypeLabel = subtypeLabel || subtype;
-  const noteTitle = buildNoteTitle({
-    domainForBlock,
-    subtypeLabel: blockSubtypeLabel,
-    detectedField: field,
-  });
-  logNoteMakerTiming(requestId, "input_ready", {
-    mode,
-    detectedField: field ?? null,
-    fileCount: files.length,
-    combinedChars: combined.length,
-    combinedWords: countWords(combined),
-    extractionMs: formatDurationMs(extractionTotalMs),
-  });
-  let llmNotes: string | null = null;
-  const llmStartedAt = nowMs();
   try {
-    llmNotes = await generateNotesWithLlm({
-      text: combined,
-      domainForBlock,
-      subtype,
-      subtypeLabel: blockSubtypeLabel,
-      specsLabel,
-      missingLabel,
-    });
-  } catch (error) {
-    console.error("OpenAI summarization failed:", error);
-  }
-  const llmMs = nowMs() - llmStartedAt;
-  logNoteMakerTiming(requestId, "llm_generation", {
-    used: Boolean(llmNotes),
-    durationMs: formatDurationMs(llmMs),
-    outputChars: llmNotes?.length ?? 0,
-  });
+    if (contentType.includes("multipart/form-data")) {
+      shouldRunGc = true;
+      if (
+        contentLength &&
+        contentLength > AI_NOTEMAKER_MAX_MULTIPART_BYTES
+      ) {
+        return NextResponse.json(
+          {
+            error: `Uploads exceed the ${formatBytes(AI_NOTEMAKER_MAX_MULTIPART_BYTES)} request limit.`,
+          },
+          { status: 413 },
+        );
+      }
 
-  if (llmNotes) {
-    const formatStartedAt = nowMs();
-    const formattedNotes = ensureMarkdownTitle(llmNotes, noteTitle);
-    const formatMs = nowMs() - formatStartedAt;
+      const form = await request.formData();
+      const textValue = form.get("text");
+      if (typeof textValue === "string") {
+        text = textValue;
+      }
+      const modeValue = form.get("mode");
+      if (typeof modeValue === "string") {
+        mode = normalizeMode(modeValue);
+      }
+      const subtypeValue = form.get("subtype");
+      if (typeof subtypeValue === "string") {
+        subtype = subtypeValue;
+      }
+      const subtypeLabelValue = form.get("subtypeLabel");
+      if (typeof subtypeLabelValue === "string") {
+        subtypeLabel = subtypeLabelValue;
+      }
+      const specsLabelValue = form.get("specsLabel");
+      if (typeof specsLabelValue === "string" && specsLabelValue.trim()) {
+        specsLabel = specsLabelValue.trim();
+      }
+      const missingLabelValue = form.get("missingLabel");
+      if (typeof missingLabelValue === "string" && missingLabelValue.trim()) {
+        missingLabel = missingLabelValue.trim();
+      }
+      form.getAll("files").forEach((entry) => {
+        if (entry instanceof File) {
+          files.push(entry);
+        }
+      });
+    } else {
+      try {
+        const payload = (await request.json()) as {
+          text?: string;
+          mode?: DomainKey;
+          subtype?: string;
+          subtypeLabel?: string;
+          specsLabel?: string;
+          missingLabel?: string;
+        };
+        text = payload.text ?? "";
+        mode = normalizeMode(payload.mode);
+        subtype = payload.subtype ?? "";
+        subtypeLabel = payload.subtypeLabel ?? "";
+        if (payload.specsLabel?.trim()) {
+          specsLabel = payload.specsLabel.trim();
+        }
+        if (payload.missingLabel?.trim()) {
+          missingLabel = payload.missingLabel.trim();
+        }
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid JSON payload." },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (!text.trim() && files.length === 0) {
+      return NextResponse.json(
+        { error: "Provide text or upload at least one file." },
+        { status: 400 },
+      );
+    }
+
+    if (files.length > MAX_FILES) {
+      return NextResponse.json(
+        { error: `You can upload up to ${MAX_FILES} files at once.` },
+        { status: 413 },
+      );
+    }
+
+    let totalUploadBytes = 0;
+    for (const file of files) {
+      if (!isAcceptedFile(file)) {
+        return NextResponse.json(
+          { error: "Unsupported file type. Use PDF, DOCX, or TXT." },
+          { status: 415 },
+        );
+      }
+      if (file.size > AI_NOTEMAKER_MAX_FILE_BYTES) {
+        return NextResponse.json(
+          {
+            error: `${file.name} exceeds the ${formatBytes(AI_NOTEMAKER_MAX_FILE_BYTES)} per-file limit.`,
+          },
+          { status: 413 },
+        );
+      }
+      totalUploadBytes += file.size;
+      if (totalUploadBytes > AI_NOTEMAKER_MAX_TOTAL_UPLOAD_BYTES) {
+        return NextResponse.json(
+          {
+            error: `Combined uploads exceed the ${formatBytes(AI_NOTEMAKER_MAX_TOTAL_UPLOAD_BYTES)} limit.`,
+          },
+          { status: 413 },
+        );
+      }
+    }
+
+    const usage = await consumeUsageLimit(request, "ai-notemaker");
+    if (!usage.allowed) {
+      return NextResponse.json(
+        {
+          error: usage.message,
+          retryAfterSeconds: usage.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(usage.retryAfterSeconds),
+          },
+        },
+      );
+    }
+
+    const chunks: string[] = [];
+    const trimmedText = normalizeWhitespace(text);
+    if (trimmedText) {
+      chunks.push(trimmedText);
+    }
+
+    let extractionTotalMs = 0;
+    const uploadedFileCount = files.length;
+
+    for (const file of files) {
+      const ext = getFileExtension(file.name);
+      let extracted = "";
+      const extractionStartedAt = nowMs();
+      try {
+        if (ext === "pdf") {
+          extracted = await extractTextFromPdf(file);
+        } else if (ext === "docx") {
+          extracted = await extractTextFromDocx(file);
+        } else if (ext === "txt") {
+          extracted = await extractTextFromTxt(file);
+        } else if (file.type === "application/pdf") {
+          extracted = await extractTextFromPdf(file);
+        } else if (
+          file.type ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ) {
+          extracted = await extractTextFromDocx(file);
+        } else if (file.type === "text/plain") {
+          extracted = await extractTextFromTxt(file);
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error.";
+        return NextResponse.json(
+          { error: `Failed to read ${file.name}: ${message}` },
+          { status: 400 },
+        );
+      }
+      const extractionMs = nowMs() - extractionStartedAt;
+      extractionTotalMs += extractionMs;
+
+      const cleaned = normalizeWhitespace(extracted);
+      logNoteMakerTiming(requestId, "file_extraction", {
+        file: file.name,
+        ext: ext || file.type || "unknown",
+        inputBytes: file.size,
+        extractedChars: cleaned.length,
+        durationMs: formatDurationMs(extractionMs),
+      });
+      if (cleaned) {
+        chunks.push(`Document: ${file.name}\n${cleaned}`);
+      }
+    }
+
+    files.length = 0;
+
+    const combined = normalizeWhitespace(chunks.join("\n\n"));
+    chunks.length = 0;
+    shouldRunGc = shouldRunGc || combined.length >= 100_000;
+    if (!combined) {
+      return NextResponse.json(
+        { error: "No readable text found in the provided input." },
+        { status: 400 },
+      );
+    }
+    if (combined.length > AI_NOTEMAKER_MAX_COMBINED_CHARS) {
+      return NextResponse.json(
+        {
+          error: `Extracted text exceeds the ${AI_NOTEMAKER_MAX_COMBINED_CHARS.toLocaleString()} character limit. Split the document into smaller parts and try again.`,
+        },
+        { status: 413 },
+      );
+    }
+    if (countWords(combined) < MIN_WORDS) {
+      return NextResponse.json(
+        { error: `Text must be at least ${MIN_WORDS} words.` },
+        { status: 400 },
+      );
+    }
+
+    let field: Exclude<DomainKey, "smart"> | undefined;
+    let domainForBlock: Exclude<DomainKey, "general" | "smart"> | null = null;
+
+    if (mode === "smart") {
+      const detected = detectDomain(combined);
+      field = detected;
+      if (detected !== "general") {
+        domainForBlock = detected;
+      }
+    } else if (mode !== "general") {
+      domainForBlock = mode as Exclude<DomainKey, "general" | "smart">;
+    }
+
+    const blockSubtypeLabel = subtypeLabel || subtype;
+    const noteTitle = buildNoteTitle({
+      domainForBlock,
+      subtypeLabel: blockSubtypeLabel,
+      detectedField: field,
+    });
+    logNoteMakerTiming(requestId, "input_ready", {
+      mode,
+      detectedField: field ?? null,
+      fileCount: uploadedFileCount,
+      combinedChars: combined.length,
+      combinedWords: countWords(combined),
+      extractionMs: formatDurationMs(extractionTotalMs),
+    });
+    let llmNotes: string | null = null;
+    const llmStartedAt = nowMs();
+    try {
+      llmNotes = await generateNotesWithLlm({
+        text: combined,
+        domainForBlock,
+        subtype,
+        subtypeLabel: blockSubtypeLabel,
+        specsLabel,
+        missingLabel,
+      });
+    } catch (error) {
+      console.error("OpenAI summarization failed:", error);
+    }
+    const llmMs = nowMs() - llmStartedAt;
+    logNoteMakerTiming(requestId, "llm_generation", {
+      used: Boolean(llmNotes),
+      durationMs: formatDurationMs(llmMs),
+      outputChars: llmNotes?.length ?? 0,
+    });
+
+    if (llmNotes) {
+      const formatStartedAt = nowMs();
+      const formattedNotes = ensureMarkdownTitle(llmNotes, noteTitle);
+      const formatMs = nowMs() - formatStartedAt;
+      logNoteMakerTiming(requestId, "post_formatting", {
+        source: "llm",
+        durationMs: formatDurationMs(formatMs),
+        outputChars: formattedNotes.length,
+      });
+      logNoteMakerTiming(requestId, "request_complete", {
+        mode,
+        source: "llm",
+        totalMs: formatDurationMs(nowMs() - requestStartedAt),
+      });
+      return NextResponse.json({
+        notes: formattedNotes,
+        field,
+      });
+    }
+
+    const fallbackStartedAt = nowMs();
+    const baseNotes = buildNotes(combined).notes;
+    const domainBlock = domainForBlock
+      ? buildDomainBlock(
+          domainForBlock,
+          subtype,
+          blockSubtypeLabel,
+          combined,
+          specsLabel,
+          missingLabel,
+        )
+      : "";
+    const notes = convertPlainNotesToMarkdown(
+      domainBlock ? `${domainBlock}\n\n${baseNotes}` : baseNotes,
+      noteTitle,
+    );
+    const fallbackMs = nowMs() - fallbackStartedAt;
     logNoteMakerTiming(requestId, "post_formatting", {
-      source: "llm",
-      durationMs: formatDurationMs(formatMs),
-      outputChars: formattedNotes.length,
+      source: "fallback",
+      durationMs: formatDurationMs(fallbackMs),
+      outputChars: notes.length,
     });
     logNoteMakerTiming(requestId, "request_complete", {
       mode,
-      source: "llm",
+      source: "fallback",
       totalMs: formatDurationMs(nowMs() - requestStartedAt),
     });
-    return NextResponse.json({
-      notes: formattedNotes,
-      field,
-    });
+
+    return NextResponse.json({ notes, field });
+  } finally {
+    files.length = 0;
+    if (shouldRunGc) {
+      maybeRunGarbageCollection();
+    }
   }
-
-  const fallbackStartedAt = nowMs();
-  const baseNotes = buildNotes(combined).notes;
-  const domainBlock = domainForBlock
-    ? buildDomainBlock(
-        domainForBlock,
-        subtype,
-        blockSubtypeLabel,
-        combined,
-        specsLabel,
-        missingLabel,
-      )
-    : "";
-  const notes = convertPlainNotesToMarkdown(
-    domainBlock ? `${domainBlock}\n\n${baseNotes}` : baseNotes,
-    noteTitle,
-  );
-  const fallbackMs = nowMs() - fallbackStartedAt;
-  logNoteMakerTiming(requestId, "post_formatting", {
-    source: "fallback",
-    durationMs: formatDurationMs(fallbackMs),
-    outputChars: notes.length,
-  });
-  logNoteMakerTiming(requestId, "request_complete", {
-    mode,
-    source: "fallback",
-    totalMs: formatDurationMs(nowMs() - requestStartedAt),
-  });
-
-  return NextResponse.json({ notes, field });
 }
 
 

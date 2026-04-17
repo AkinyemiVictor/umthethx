@@ -108,6 +108,13 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   return parsed;
 };
 
+const maybeRunGarbageCollection = () => {
+  const gc = (global as typeof globalThis & { gc?: () => void }).gc;
+  if (typeof gc === "function") {
+    gc();
+  }
+};
+
 const MAX_DOCUMENT_PAGES = parsePositiveInteger(
   process.env.MAX_DOCUMENT_PAGES?.trim(),
   DEFAULT_MAX_DOCUMENT_PAGES,
@@ -132,7 +139,7 @@ const CLEANUP_WORKER_CONCURRENCY = parsePositiveInteger(
 const HEAVY_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
   process.env.HEAVY_WORKER_INPUT_CONCURRENCY?.trim() ||
     process.env.WORKER_INPUT_CONCURRENCY?.trim(),
-  2,
+  isRailwayRuntime ? 1 : 2,
 );
 const LIGHT_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
   process.env.LIGHT_WORKER_INPUT_CONCURRENCY?.trim(),
@@ -140,7 +147,7 @@ const LIGHT_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
 );
 const WORKER_MAX_JOBS = parsePositiveInteger(
   process.env.WORKER_MAX_JOBS?.trim(),
-  isRailwayRuntime ? 25 : 0,
+  isRailwayRuntime ? 10 : 0,
 );
 const WORKER_KEEPALIVE_MS = parsePositiveInteger(
   process.env.WORKER_KEEPALIVE_MS?.trim(),
@@ -430,6 +437,7 @@ type PdfJsDocument = {
       canvasContext: CanvasRenderingContext2D;
       viewport: { width: number; height: number };
     }) => { promise: Promise<void> };
+    cleanup?: () => void;
   }>;
   cleanup?: () => void;
 };
@@ -445,6 +453,8 @@ type PdfJsModule = {
 
 type CanvasModule = {
   createCanvas: (width: number, height: number) => {
+    width: number;
+    height: number;
     getContext: (contextId: "2d") => CanvasRenderingContext2D | null;
     toBuffer: (type: "image/jpeg", options?: { quality?: number }) => Buffer;
   };
@@ -1476,8 +1486,12 @@ const buildDocxFromTextContent = async (text: string, outputPath: string) => {
   const doc = new Document({
     sections: [{ children }],
   });
-  const buffer = await Packer.toBuffer(doc);
-  await writeFile(outputPath, buffer);
+  let buffer: Buffer | null = await Packer.toBuffer(doc);
+  try {
+    await writeFile(outputPath, buffer);
+  } finally {
+    buffer = null;
+  }
 };
 
 const buildDocxFromText = async (textPath: string, outputPath: string) => {
@@ -1511,14 +1525,20 @@ const zipFiles = async (zipPath: string, files: string[]) => {
 
   const JsZip = await getJsZipModule();
   const zip = new JsZip();
-  await Promise.all(
-    files.map(async (filePath) => {
-      const data = await readFile(filePath);
+  for (const filePath of files) {
+    let data: Buffer | null = await readFile(filePath);
+    try {
       zip.file(path.basename(filePath), data);
-    }),
-  );
-  const buffer = await zip.generateAsync({ type: "nodebuffer" });
-  await writeFile(zipPath, buffer);
+    } finally {
+      data = null;
+    }
+  }
+  let buffer: Buffer | null = await zip.generateAsync({ type: "nodebuffer" });
+  try {
+    await writeFile(zipPath, buffer);
+  } finally {
+    buffer = null;
+  }
 };
 
 const zipDirectory = async (zipPath: string, dirPath: string) => {
@@ -1536,24 +1556,30 @@ const zipDirectory = async (zipPath: string, dirPath: string) => {
   const base = path.resolve(dirPath);
   const walk = async (currentDir: string) => {
     const entries = await readdir(currentDir, { withFileTypes: true });
-    await Promise.all(
-      entries.map(async (entry) => {
-        const entryPath = path.join(currentDir, entry.name);
-        const relPath = path
-          .relative(base, entryPath)
-          .replace(/\\/g, "/");
-        if (entry.isDirectory()) {
-          await walk(entryPath);
-        } else if (entry.isFile()) {
-          const data = await readFile(entryPath);
+    for (const entry of entries) {
+      const entryPath = path.join(currentDir, entry.name);
+      const relPath = path
+        .relative(base, entryPath)
+        .replace(/\\/g, "/");
+      if (entry.isDirectory()) {
+        await walk(entryPath);
+      } else if (entry.isFile()) {
+        let data: Buffer | null = await readFile(entryPath);
+        try {
           zip.file(relPath, data);
+        } finally {
+          data = null;
         }
-      }),
-    );
+      }
+    }
   };
   await walk(base);
-  const buffer = await zip.generateAsync({ type: "nodebuffer" });
-  await writeFile(zipPath, buffer);
+  let buffer: Buffer | null = await zip.generateAsync({ type: "nodebuffer" });
+  try {
+    await writeFile(zipPath, buffer);
+  } finally {
+    buffer = null;
+  }
 };
 
 const runPdfToImages = async (
@@ -1580,38 +1606,55 @@ const runPdfToImages = async (
   try {
     const pdfjs = await getPdfjsModule();
     const { createCanvas } = await getCanvasModule();
-    const data = await readFile(inputPath);
-    const loadingTask = pdfjs.getDocument({
-      data: data instanceof Uint8Array ? data : new Uint8Array(data),
-      disableWorker: true,
-    });
-    const pdf = await loadingTask.promise;
-    const results: string[] = [];
-    const scale = 2;
+    let data: Buffer | null = await readFile(inputPath);
+    let loadingTask: PdfJsLoadingTask | null = null;
+    let pdf: PdfJsDocument | null = null;
 
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale });
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        throw new Error("Unable to create 2D canvas context.");
+    try {
+      loadingTask = pdfjs.getDocument({
+        data: data instanceof Uint8Array ? data : new Uint8Array(data),
+        disableWorker: true,
+      });
+      data = null;
+      pdf = await loadingTask.promise;
+      const results: string[] = [];
+      const scale = 2;
+
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale });
+        const canvas = createCanvas(viewport.width, viewport.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          throw new Error("Unable to create 2D canvas context.");
+        }
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const outputPath = path.join(outputDir, `${base}-${pageNumber}.jpg`);
+        let buffer: Buffer | null = canvas.toBuffer("image/jpeg", {
+          quality: 0.92,
+        });
+        try {
+          await writeFile(outputPath, buffer);
+        } finally {
+          buffer = null;
+          page.cleanup?.();
+          canvas.width = 0;
+          canvas.height = 0;
+        }
+        results.push(outputPath);
       }
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      const outputPath = path.join(outputDir, `${base}-${pageNumber}.jpg`);
-      const buffer = canvas.toBuffer("image/jpeg", { quality: 0.92 });
-      await writeFile(outputPath, buffer);
-      results.push(outputPath);
-    }
 
-    if (typeof pdf.cleanup === "function") {
-      pdf.cleanup();
+      return results;
+    } finally {
+      data = null;
+      pdf?.cleanup?.();
+      if (loadingTask?.destroy) {
+        await loadingTask.destroy().catch(() => undefined);
+      }
+      pdf = null;
+      loadingTask = null;
+      maybeRunGarbageCollection();
     }
-    if (typeof loadingTask.destroy === "function") {
-      await loadingTask.destroy();
-    }
-
-    return results;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
     throw new Error(
@@ -1699,7 +1742,7 @@ const isImg2PdfMissing = (error: unknown) => {
 
 const runImageToPdfWithPdfLib = async (inputPath: string, outputPath: string) => {
   const ext = path.extname(inputPath).slice(1).toLowerCase();
-  const bytes = await readFile(inputPath);
+  let bytes: Buffer | null = await readFile(inputPath);
   const pdfDoc = await PDFDocument.create();
   let image;
 
@@ -1721,8 +1764,13 @@ const runImageToPdfWithPdfLib = async (inputPath: string, outputPath: string) =>
     height: image.height,
   });
 
-  const pdfBytes = await pdfDoc.save();
-  await writeFile(outputPath, pdfBytes);
+  bytes = null;
+  let pdfBytes: Uint8Array | null = await pdfDoc.save();
+  try {
+    await writeFile(outputPath, pdfBytes);
+  } finally {
+    pdfBytes = null;
+  }
 };
 
 const runImageToPdf = async (inputPath: string, outputPath: string) => {
@@ -1755,9 +1803,29 @@ const ensureDir = async (dirPath: string) => {
 };
 
 const getPdfPageCount = async (pdfPath: string) => {
-  const bytes = await readFile(pdfPath);
-  const pdfDoc = await PDFDocument.load(bytes);
-  return pdfDoc.getPageCount();
+  try {
+    const { stdout } = await runCommand("pdfinfo", [pdfPath]);
+    const match = stdout.match(/^Pages:\s+(\d+)$/m);
+    const pageCountText = match?.[1];
+    if (pageCountText) {
+      return Number.parseInt(pageCountText, 10);
+    }
+  } catch (error) {
+    if (!isMissingCommandError(error)) {
+      console.warn(
+        `${workerLogPrefix} pdfinfo page-count fallback triggered for ${path.basename(pdfPath)}`,
+        error,
+      );
+    }
+  }
+
+  let bytes: Buffer | null = await readFile(pdfPath);
+  try {
+    const pdfDoc = await PDFDocument.load(bytes);
+    return pdfDoc.getPageCount();
+  } finally {
+    bytes = null;
+  }
 };
 
 const enforceDocumentPageLimit = async (pdfPath: string, fileName: string) => {
@@ -1803,24 +1871,25 @@ const processJob = async (
   await updateJobRecord(jobId, { status: "processing", error: null });
 
   const baseCounts = new Map<string, number>();
-  const preparedInputs = await Promise.all(
-    job.inputs.map(async (input, index) => {
-      const safeName = sanitizeFileName(input.filename);
-      const fileName = safeName || `input-${index + 1}`;
-      const localPath = path.join(inputDir, `${index + 1}-${fileName}`);
-      await downloadInput(input.key, localPath);
-      const base = stripExtension(fileName) || `file-${index + 1}`;
-      const count = (baseCounts.get(base) ?? 0) + 1;
-      baseCounts.set(base, count);
-      const uniqueBase = count > 1 ? `${base}-${count}` : base;
-      return {
-        ...input,
-        safeName: fileName,
-        baseName: uniqueBase,
-        localPath,
-      };
-    }),
-  );
+  const preparedInputs: Array<
+    JobInput & { safeName: string; baseName: string; localPath: string }
+  > = [];
+  for (const [index, input] of job.inputs.entries()) {
+    const safeName = sanitizeFileName(input.filename);
+    const fileName = safeName || `input-${index + 1}`;
+    const localPath = path.join(inputDir, `${index + 1}-${fileName}`);
+    await downloadInput(input.key, localPath);
+    const base = stripExtension(fileName) || `file-${index + 1}`;
+    const count = (baseCounts.get(base) ?? 0) + 1;
+    baseCounts.set(base, count);
+    const uniqueBase = count > 1 ? `${base}-${count}` : base;
+    preparedInputs.push({
+      ...input,
+      safeName: fileName,
+      baseName: uniqueBase,
+      localPath,
+    });
+  }
 
   const handleOcrText = async (
     input: JobInput & { baseName: string; localPath: string },
@@ -2440,156 +2509,160 @@ const processJob = async (
       const processPreparedInput = async (
         input: JobInput & { baseName: string; localPath: string },
       ) => {
-        switch (converter.slug) {
-          case "image-to-text":
-          case "jpeg-to-text":
-          case "png-to-text":
-          case "heic-to-text":
-          case "heif-to-text":
-          case "avif-to-text":
-          case "tiff-to-text":
-            await handleOcrText(input);
-            break;
-          case "svg-to-text":
-            await handleSvgToText(input);
-            break;
-          case "jpg-to-word":
-          case "heic-to-word":
-          case "heif-to-word":
-          case "avif-to-docx":
-          case "png-to-document":
-          case "tiff-to-word":
-            await handleOcrDocx(input);
-            break;
-          case "jpg-to-excel":
-          case "png-to-xlsx":
-          case "avif-to-xlsx":
-          case "heic-to-xlsx":
-          case "heif-to-xlsx":
-          case "tiff-to-xlsx":
-            await handleOcrXlsx(input);
-            break;
-          case "pdf-to-text":
-            await handlePdfToText(input);
-            break;
-          case "pdf-to-docx":
-            await handlePdfToDocx(input);
-            break;
-          case "pdf-to-csv":
-            await handlePdfTables(input, "csv");
-            break;
-          case "pdf-to-excel":
-          case "pdf-to-xlsx":
-            await handlePdfTables(input, "xlsx");
-            break;
-          case "word-to-pdf":
-          case "text-to-pdf":
-          case "html-to-pdf": {
-            const outputPath = await convertWithLibreOffice(
-              input.localPath,
-              "pdf",
-              outputDir,
-            );
-            await enforceDocumentPageLimit(outputPath, input.filename);
-            await addOutput(outputPath, buildOutputName(input.baseName, "pdf"));
-            break;
+        try {
+          switch (converter.slug) {
+            case "image-to-text":
+            case "jpeg-to-text":
+            case "png-to-text":
+            case "heic-to-text":
+            case "heif-to-text":
+            case "avif-to-text":
+            case "tiff-to-text":
+              await handleOcrText(input);
+              break;
+            case "svg-to-text":
+              await handleSvgToText(input);
+              break;
+            case "jpg-to-word":
+            case "heic-to-word":
+            case "heif-to-word":
+            case "avif-to-docx":
+            case "png-to-document":
+            case "tiff-to-word":
+              await handleOcrDocx(input);
+              break;
+            case "jpg-to-excel":
+            case "png-to-xlsx":
+            case "avif-to-xlsx":
+            case "heic-to-xlsx":
+            case "heif-to-xlsx":
+            case "tiff-to-xlsx":
+              await handleOcrXlsx(input);
+              break;
+            case "pdf-to-text":
+              await handlePdfToText(input);
+              break;
+            case "pdf-to-docx":
+              await handlePdfToDocx(input);
+              break;
+            case "pdf-to-csv":
+              await handlePdfTables(input, "csv");
+              break;
+            case "pdf-to-excel":
+            case "pdf-to-xlsx":
+              await handlePdfTables(input, "xlsx");
+              break;
+            case "word-to-pdf":
+            case "text-to-pdf":
+            case "html-to-pdf": {
+              const outputPath = await convertWithLibreOffice(
+                input.localPath,
+                "pdf",
+                outputDir,
+              );
+              await enforceDocumentPageLimit(outputPath, input.filename);
+              await addOutput(outputPath, buildOutputName(input.baseName, "pdf"));
+              break;
+            }
+            case "pdf-to-jpg":
+              await handlePdfToJpg(input);
+              break;
+            case "pdf-to-jpeg":
+              await handlePdfToImageFormat(input, "jpeg");
+              break;
+            case "pdf-to-png":
+              await handlePdfToImageFormat(input, "png");
+              break;
+            case "pdf-to-tiff":
+              await handlePdfToImageFormat(input, "tiff");
+              break;
+            case "pdf-to-heic":
+              await handlePdfToImageFormat(input, "heic");
+              break;
+            case "pdf-to-heif":
+              await handlePdfToImageFormat(input, "heif");
+              break;
+            case "pdf-to-avif":
+              await handlePdfToImageFormat(input, "avif");
+              break;
+            case "split-pdf":
+              await handlePdfSplit(input);
+              break;
+            case "word-to-jpg":
+            case "excel-to-jpg":
+              await handleOfficeToJpg(input);
+              break;
+            case "pdf-to-html":
+              await handlePdfToHtml(input);
+              break;
+            case "jpeg-to-png":
+            case "avif-to-png":
+            case "webp-to-png":
+              await handleImageConvert(input, "png");
+              break;
+            case "jpeg-to-avif":
+            case "png-to-avif":
+            case "heic-to-avif":
+              await handleImageConvert(input, "avif");
+              break;
+            case "jpeg-to-heic":
+            case "avif-to-heic":
+              await handleImageConvert(input, "heic");
+              break;
+            case "png-to-jpg":
+            case "heic-to-jpg":
+              await handleImageConvert(input, "jpg");
+              break;
+            case "heif-to-jpeg":
+              await handleImageConvert(input, "jpeg");
+              break;
+            case "heif-to-png":
+              await handleImageConvert(input, "png");
+              break;
+            case "avif-to-jpeg":
+            case "webp-to-jpeg":
+              await handleImageConvert(input, "jpeg");
+              break;
+            case "png-to-svg":
+            case "jpeg-to-svg":
+            case "heic-to-svg":
+            case "webp-to-svg":
+              await handleImageToSvg(input);
+              break;
+            case "svg-to-png":
+              await handleSvgToPng(input);
+              break;
+            case "svg-to-jpeg":
+              await handleSvgToJpeg(input);
+              break;
+            case "svg-to-heic":
+              await handleSvgToHeic(input);
+              break;
+            case "heic-to-pdf":
+            case "heif-to-pdf":
+            case "tiff-to-pdf":
+            case "jpg-to-pdf":
+            case "png-to-pdf":
+            case "avif-to-pdf":
+            case "webp-to-pdf":
+            case "svg-to-pdf":
+              await handleImageToPdf(input);
+              break;
+            case "qr-code-scanner":
+            case "barcode-scanner":
+              await handleQrScan(input);
+              break;
+            case "qr-code-generator":
+              await handleQrGenerate(input);
+              break;
+            case "csv-to-json":
+              await handleCsvToJson(input);
+              break;
+            default:
+              throw new Error(`Unsupported converter: ${converter.slug}`);
           }
-          case "pdf-to-jpg":
-            await handlePdfToJpg(input);
-            break;
-          case "pdf-to-jpeg":
-            await handlePdfToImageFormat(input, "jpeg");
-            break;
-          case "pdf-to-png":
-            await handlePdfToImageFormat(input, "png");
-            break;
-          case "pdf-to-tiff":
-            await handlePdfToImageFormat(input, "tiff");
-            break;
-          case "pdf-to-heic":
-            await handlePdfToImageFormat(input, "heic");
-            break;
-          case "pdf-to-heif":
-            await handlePdfToImageFormat(input, "heif");
-            break;
-          case "pdf-to-avif":
-            await handlePdfToImageFormat(input, "avif");
-            break;
-          case "split-pdf":
-            await handlePdfSplit(input);
-            break;
-          case "word-to-jpg":
-          case "excel-to-jpg":
-            await handleOfficeToJpg(input);
-            break;
-          case "pdf-to-html":
-            await handlePdfToHtml(input);
-            break;
-          case "jpeg-to-png":
-          case "avif-to-png":
-          case "webp-to-png":
-            await handleImageConvert(input, "png");
-            break;
-          case "jpeg-to-avif":
-          case "png-to-avif":
-          case "heic-to-avif":
-            await handleImageConvert(input, "avif");
-            break;
-          case "jpeg-to-heic":
-          case "avif-to-heic":
-            await handleImageConvert(input, "heic");
-            break;
-          case "png-to-jpg":
-          case "heic-to-jpg":
-            await handleImageConvert(input, "jpg");
-            break;
-          case "heif-to-jpeg":
-            await handleImageConvert(input, "jpeg");
-            break;
-          case "heif-to-png":
-            await handleImageConvert(input, "png");
-            break;
-          case "avif-to-jpeg":
-          case "webp-to-jpeg":
-            await handleImageConvert(input, "jpeg");
-            break;
-          case "png-to-svg":
-          case "jpeg-to-svg":
-          case "heic-to-svg":
-          case "webp-to-svg":
-            await handleImageToSvg(input);
-            break;
-          case "svg-to-png":
-            await handleSvgToPng(input);
-            break;
-          case "svg-to-jpeg":
-            await handleSvgToJpeg(input);
-            break;
-          case "svg-to-heic":
-            await handleSvgToHeic(input);
-            break;
-          case "heic-to-pdf":
-          case "heif-to-pdf":
-          case "tiff-to-pdf":
-          case "jpg-to-pdf":
-          case "png-to-pdf":
-          case "avif-to-pdf":
-          case "webp-to-pdf":
-          case "svg-to-pdf":
-            await handleImageToPdf(input);
-            break;
-          case "qr-code-scanner":
-          case "barcode-scanner":
-            await handleQrScan(input);
-            break;
-          case "qr-code-generator":
-            await handleQrGenerate(input);
-            break;
-          case "csv-to-json":
-            await handleCsvToJson(input);
-            break;
-          default:
-            throw new Error(`Unsupported converter: ${converter.slug}`);
+        } finally {
+          maybeRunGarbageCollection();
         }
       };
 
@@ -2603,6 +2676,7 @@ const processJob = async (
     await updateJobRecord(jobId, { status: "completed", outputs });
   } finally {
     await rm(workDir, { recursive: true, force: true });
+    maybeRunGarbageCollection();
   }
 };
 
