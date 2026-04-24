@@ -183,7 +183,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
         <div className="flex items-center gap-2 sm:gap-6">
           <ThemeToggle />
           <GoogleTranslateWidget />
-          <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[740px]:flex min-[740px]:gap-6 min-[740px]:text-sm">
+          <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[980px]:flex min-[980px]:gap-6 min-[980px]:text-sm">
             <div className="inline-flex overflow-hidden rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
               <Link
                 href={homeHref}
@@ -282,7 +282,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             aria-controls="mobile-menu"
             aria-expanded={isMobileMenuOpen}
             onClick={toggleMobileMenu}
-            className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white p-2 text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] min-[740px]:hidden"
+            className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white p-2 text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] min-[980px]:hidden"
           >
             <span className="sr-only">{t("header.toggleMenu")}</span>
             <svg
@@ -307,7 +307,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           type="button"
           aria-hidden="true"
           onClick={closeMobileMenu}
-          className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-sm min-[740px]:hidden"
+          className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-sm min-[980px]:hidden"
         />
       ) : null}
 
@@ -321,7 +321,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           isMobileMenuOpen
             ? "translate-x-0"
             : "translate-x-full pointer-events-none",
-          "min-[740px]:hidden",
+          "min-[980px]:hidden",
         ]
           .filter(Boolean)
           .join(" ")}
