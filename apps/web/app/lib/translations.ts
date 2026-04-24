@@ -31,7 +31,7 @@ export const translations = {
     "header.toggleConvertersList": "Toggle converters list",
     "header.toggleMenu": "Toggle menu",
     "header.scrollMore": "Scroll to view more converters.",
-    "footer.tagline": "AI-powered converters for images, documents, and more.",
+    "footer.tagline": "Online converters for images, documents, and more.",
     "footer.converters": "Converters",
     "footer.quickLinks": "Quick links",
     "footer.language": "Language",

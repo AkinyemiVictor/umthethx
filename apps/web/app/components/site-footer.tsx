@@ -57,8 +57,8 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
 
   return (
     <footer className="rounded-3xl border border-zinc-300 bg-white/95 p-6 shadow-md shadow-black/10 backdrop-blur dark:border-[var(--border-1)] dark:bg-[var(--surface-1)] dark:shadow-none">
-      <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr_1fr_1fr]">
-        <div className="space-y-3">
+      <div className="grid gap-8 min-[732px]:grid-cols-3 xl:grid-cols-4">
+        <div className="space-y-3 min-[732px]:col-span-3 xl:col-span-1">
           <Link href={homeHref} className="inline-flex">
             <Image
               src="/logo/logo%202.png"

@@ -35,7 +35,7 @@ type SiteHeaderProps = {
 
 const lrwGptHref = "https://lrwgpt.salawstudentsa.blog/";
 const navCtaClassName =
-  "inline-flex items-center rounded-full bg-[#0000ff] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-black/15 transition hover:bg-[#0000e6] active:bg-[#0000cc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(0,0,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-[#4a6cff] dark:hover:bg-[#3c5df0] dark:active:bg-[#2f4ce0] dark:focus-visible:ring-[rgba(74,108,255,0.45)] dark:focus-visible:ring-offset-[var(--background)]";
+  "inline-flex items-center rounded-full bg-[#0000ff] px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-black/15 transition hover:bg-[#0000e6] active:bg-[#0000cc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(0,0,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-[#4a6cff] dark:hover:bg-[#3c5df0] dark:active:bg-[#2f4ce0] dark:focus-visible:ring-[rgba(74,108,255,0.45)] dark:focus-visible:ring-offset-[var(--background)] min-[1040px]:px-4 min-[1040px]:py-2 min-[1040px]:text-sm";
 
 export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleId = "converter-toggle";
@@ -160,7 +160,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           className="fixed inset-0 z-10 cursor-default"
         />
       ) : null}
-      <header className="flex items-center justify-between gap-3 sm:gap-6">
+      <header className="flex items-center justify-between gap-3 sm:gap-4 lg:gap-6">
         <Link href={homeHref} className="flex items-center gap-3 shrink-0">
           <Image
             src="/logo/logo%202.png"
@@ -180,10 +180,10 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           />
           <span className="sr-only">Umthethx</span>
         </Link>
-        <div className="flex items-center gap-2 sm:gap-6">
+        <div className="flex items-center gap-2 sm:gap-3 lg:gap-5">
           <ThemeToggle />
           <GoogleTranslateWidget />
-          <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[980px]:flex min-[980px]:gap-6 min-[980px]:text-sm">
+          <nav className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-[var(--muted)] min-[900px]:flex min-[900px]:gap-3 min-[1040px]:gap-5 min-[900px]:text-xs min-[1040px]:text-sm">
             <div className="inline-flex overflow-hidden rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-700 shadow-sm shadow-black/5 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)]">
               <Link
                 href={homeHref}
@@ -191,7 +191,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                   closeNoteMaker();
                   closeConverters();
                 }}
-                className="inline-flex items-center gap-2 whitespace-nowrap px-3 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+                className="inline-flex items-center gap-2 whitespace-nowrap px-3 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[var(--background)] min-[1040px]:px-4 min-[1040px]:py-2 min-[1040px]:text-sm"
               >
                 {t("header.converters")}
               </Link>
@@ -203,7 +203,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                 }}
                 aria-controls="converter-panel"
                 aria-expanded={isConvertersOpen}
-                className="inline-flex items-center justify-center border-l border-zinc-200 px-2 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-1)] dark:focus-visible:ring-offset-[var(--background)] sm:px-3 sm:py-2"
+                className="inline-flex items-center justify-center border-l border-zinc-200 px-2 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-1)] dark:focus-visible:ring-offset-[var(--background)] min-[1040px]:px-3 min-[1040px]:py-2"
               >
                 <svg
                   aria-hidden="true"
@@ -233,7 +233,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                   closeConverters();
                   closeNoteMaker();
                 }}
-                className="inline-flex items-center gap-2 whitespace-nowrap px-3 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[var(--background)] sm:px-4 sm:py-2 sm:text-sm"
+                className="inline-flex items-center gap-2 whitespace-nowrap px-3 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[var(--background)] min-[1040px]:px-4 min-[1040px]:py-2 min-[1040px]:text-sm"
               >
                 {t("header.noteMakerTypes")}
               </Link>
@@ -245,7 +245,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                 }}
                 aria-controls="notemaker-panel"
                 aria-expanded={isNoteMakerOpen}
-                className="inline-flex items-center justify-center border-l border-zinc-200 px-2 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-1)] dark:focus-visible:ring-offset-[var(--background)] sm:px-3 sm:py-2"
+                className="inline-flex items-center justify-center border-l border-zinc-200 px-2 py-1.5 transition hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-1)] dark:focus-visible:ring-offset-[var(--background)] min-[1040px]:px-3 min-[1040px]:py-2"
               >
                 <svg
                   aria-hidden="true"
@@ -282,7 +282,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
             aria-controls="mobile-menu"
             aria-expanded={isMobileMenuOpen}
             onClick={toggleMobileMenu}
-            className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white p-2 text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] min-[980px]:hidden"
+            className="inline-flex items-center justify-center rounded-full border border-zinc-200 bg-white p-2 text-zinc-700 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--foreground)] dark:focus-visible:ring-offset-[var(--background)] min-[900px]:hidden"
           >
             <span className="sr-only">{t("header.toggleMenu")}</span>
             <svg
@@ -307,7 +307,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           type="button"
           aria-hidden="true"
           onClick={closeMobileMenu}
-          className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-sm min-[980px]:hidden"
+          className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-sm min-[900px]:hidden"
         />
       ) : null}
 
@@ -321,7 +321,7 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
           isMobileMenuOpen
             ? "translate-x-0"
             : "translate-x-full pointer-events-none",
-          "min-[980px]:hidden",
+          "min-[900px]:hidden",
         ]
           .filter(Boolean)
           .join(" ")}
