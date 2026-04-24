@@ -16,6 +16,7 @@ const staticPages: Array<{
   { path: "/ocr", changeFrequency: "daily", priority: 1 },
   { path: "/ai-notemaker", changeFrequency: "weekly", priority: 0.9 },
   { path: "/contact", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/faq", changeFrequency: "monthly", priority: 0.5 },
   { path: "/privacy", changeFrequency: "monthly", priority: 0.4 },
   { path: "/refunds", changeFrequency: "monthly", priority: 0.4 },
   { path: "/terms", changeFrequency: "monthly", priority: 0.4 },

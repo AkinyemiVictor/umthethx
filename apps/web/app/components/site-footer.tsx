@@ -17,6 +17,7 @@ const quickLinks: Array<{ key: TranslationKey; href: string }> = [
   { key: "footer.terms", href: "/terms" },
   { key: "footer.privacy", href: "/privacy" },
   { key: "footer.refunds", href: "/refunds" },
+  { key: "footer.faq", href: "/faq" },
   { key: "footer.contact", href: "/contact" },
 ];
 
@@ -32,54 +33,19 @@ const socialLinks = [
   {
     label: "X",
     href: "https://x.com/umthethx",
-    icon: (
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        className="h-4 w-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M4 4l16 16" />
-        <path d="M20 4L4 20" />
-      </svg>
-    ),
+    iconSrc: "https://cdn.jsdelivr.net/npm/simple-icons@v16/icons/x.svg",
   },
   {
     label: "Instagram",
     href: "https://instagram.com/umthethx",
-    icon: (
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        className="h-4 w-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="4" y="4" width="16" height="16" rx="4" />
-        <circle cx="12" cy="12" r="3.5" />
-        <circle cx="17" cy="7" r="1" />
-      </svg>
-    ),
+    iconSrc:
+      "https://cdn.jsdelivr.net/npm/simple-icons@v16/icons/instagram.svg",
   },
   {
     label: "Facebook",
     href: "https://facebook.com/umthethx",
-    icon: (
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        className="h-4 w-4 fill-current"
-      >
-        <path d="M13.33 20v-6.14h2.06l.31-2.39h-2.37V9.95c0-.69.19-1.16 1.18-1.16h1.26V6.65c-.22-.03-.97-.09-1.84-.09-1.82 0-3.06 1.11-3.06 3.14v1.77H9v2.39h2.21V20h2.12z" />
-      </svg>
-    ),
+    iconSrc:
+      "https://cdn.jsdelivr.net/npm/simple-icons@v16/icons/facebook.svg",
   },
 ];
 
@@ -124,9 +90,16 @@ export function SiteFooter({ footerConverters }: SiteFooterProps) {
                 key={link.label}
                 href={link.href}
                 aria-label={`Umthethx on ${link.label}`}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)] dark:hover:border-[var(--border-1)] dark:hover:bg-[var(--surface-3)]"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-white text-zinc-700 shadow-sm shadow-black/5 transition hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] hover:shadow-[0_0_0_1px_var(--brand-ring)] dark:border-[var(--border-2)] dark:bg-[var(--surface-2)] dark:text-[var(--muted)] dark:hover:border-[var(--brand-400)] dark:hover:bg-[var(--brand-50)]"
               >
-                {link.icon}
+                <img
+                  src={link.iconSrc}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  decoding="async"
+                  className="h-4 w-4 dark:invert"
+                />
               </a>
             ))}
           </div>

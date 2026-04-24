@@ -33,6 +33,10 @@ type SiteHeaderProps = {
   currentSlug?: string;
 };
 
+const lrwGptHref = "https://lrwgpt.salawstudentsa.blog/";
+const navCtaClassName =
+  "inline-flex items-center rounded-full bg-[#0000ff] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-black/15 transition hover:bg-[#0000e6] active:bg-[#0000cc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(0,0,255,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-[#4a6cff] dark:hover:bg-[#3c5df0] dark:active:bg-[#2f4ce0] dark:focus-visible:ring-[rgba(74,108,255,0.45)] dark:focus-visible:ring-offset-[var(--background)]";
+
 export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
   const toggleId = "converter-toggle";
   const converterGroups = getConverterCategoryGroups(converters);
@@ -264,6 +268,14 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
                 </svg>
               </button>
             </div>
+            <a
+              href={lrwGptHref}
+              target="_blank"
+              rel="noreferrer"
+              className={navCtaClassName}
+            >
+              LRW-GPT
+            </a>
           </nav>
           <button
             type="button"
@@ -530,6 +542,15 @@ export function SiteHeader({ converters, currentSlug }: SiteHeaderProps) {
               </div>
             </div>
           ) : null}
+          <a
+            href={lrwGptHref}
+            target="_blank"
+            rel="noreferrer"
+            onClick={closeMobileMenu}
+            className={`${navCtaClassName} justify-center`}
+          >
+            LRW-GPT
+          </a>
           </div>
         </div>
       </div>
