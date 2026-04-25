@@ -51,7 +51,7 @@ export default async function RootLayout({
     <html lang={lang} data-market={market}>
       <head>
         <script
-          src="https://quge5.com/88/tag.min.js"
+          src="/tag.min.js"
           data-zone="233306"
           async
           data-cfasync="false"
