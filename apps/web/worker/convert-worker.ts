@@ -1,5 +1,4 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { Worker, type ConnectionOptions } from "bullmq";
 import { createReadStream, createWriteStream } from "fs";
 import {
   copyFile,
@@ -34,13 +33,6 @@ import {
   type JobOutput,
 } from "../src/lib/job-store";
 import { getConverterBySlug } from "../src/lib/converters";
-import {
-  CLEANUP_QUEUE_NAME,
-  HEAVY_QUEUE_NAME,
-  LIGHT_QUEUE_NAME,
-  getRedisConnection,
-  scheduleJobCleanup,
-} from "../src/lib/queue";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,8 +40,8 @@ const scriptsDir = path.join(__dirname, "scripts");
 const repoRoot = path.resolve(__dirname, "../../..");
 const isRailwayRuntime = Boolean(
   process.env.RAILWAY_PROJECT_ID ||
-    process.env.RAILWAY_SERVICE_ID ||
-    process.env.RAILWAY_ENVIRONMENT_NAME,
+  process.env.RAILWAY_SERVICE_ID ||
+  process.env.RAILWAY_ENVIRONMENT_NAME,
 );
 
 if (!isRailwayRuntime) {
@@ -64,6 +56,7 @@ const TESSERACT_BIN = process.env.TESSERACT_BIN?.trim() || "tesseract";
 const TESSERACT_LANG = process.env.TESSERACT_LANG?.trim() || "eng";
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+const COMMAND_OUTPUT_LIMIT = 512 * 1024;
 const MIN_OCR_TEXT_SCORE = 5;
 const MIN_PDF_EXTRACTED_TEXT_SCORE = 15;
 const DEFAULT_MAX_DOCUMENT_PAGES = 30;
@@ -123,56 +116,11 @@ const MAX_SPLIT_PDF_PAGES = parsePositiveInteger(
   process.env.MAX_SPLIT_PDF_PAGES?.trim(),
   Math.max(DEFAULT_MAX_SPLIT_PDF_PAGES, MAX_DOCUMENT_PAGES),
 );
-const HEAVY_WORKER_CONCURRENCY = parsePositiveInteger(
-  process.env.HEAVY_WORKER_CONCURRENCY?.trim() ||
-    process.env.WORKER_CONCURRENCY?.trim(),
-  1,
-);
-const LIGHT_WORKER_CONCURRENCY = parsePositiveInteger(
-  process.env.LIGHT_WORKER_CONCURRENCY?.trim(),
-  4,
-);
-const CLEANUP_WORKER_CONCURRENCY = parsePositiveInteger(
-  process.env.CLEANUP_WORKER_CONCURRENCY?.trim(),
-  2,
-);
-const HEAVY_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
-  process.env.HEAVY_WORKER_INPUT_CONCURRENCY?.trim() ||
-    process.env.WORKER_INPUT_CONCURRENCY?.trim(),
-  isRailwayRuntime ? 1 : 2,
-);
-const LIGHT_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
-  process.env.LIGHT_WORKER_INPUT_CONCURRENCY?.trim(),
-  1,
-);
-const WORKER_MAX_JOBS = parsePositiveInteger(
-  process.env.WORKER_MAX_JOBS?.trim(),
-  isRailwayRuntime ? 10 : 0,
-);
-const WORKER_KEEPALIVE_MS = parsePositiveInteger(
-  process.env.WORKER_KEEPALIVE_MS?.trim(),
-  60_000,
-);
 const WORKER_INSTANCE_LABEL =
   process.env.WORKER_INSTANCE_LABEL?.trim() ||
   process.env.HOSTNAME?.trim() ||
   `pid-${process.pid}`;
 const workerLogPrefix = `[worker:${WORKER_INSTANCE_LABEL}]`;
-
-const describeRedisTarget = () => {
-  const redisUrl = process.env.REDIS_URL?.trim();
-  if (redisUrl) {
-    try {
-      return new URL(redisUrl).host;
-    } catch {
-      return "invalid REDIS_URL";
-    }
-  }
-
-  const host = process.env.REDIS_HOST?.trim();
-  const port = process.env.REDIS_PORT?.trim() || "6379";
-  return host ? `${host}:${port}` : "unconfigured";
-};
 
 const sanitizeFileName = (fileName: string) => {
   const cleaned = fileName
@@ -244,10 +192,8 @@ const stripExtension = (fileName: string) => {
 const contentTypeByExtension: Record<string, string> = {
   txt: "text/plain",
   pdf: "application/pdf",
-  docx:
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xlsx:
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   csv: "text/csv",
   json: "application/json",
   html: "text/html",
@@ -301,6 +247,7 @@ const runCommand = (
   options: { cwd?: string; windowsHide?: boolean } = {},
 ) =>
   new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    let settled = false;
     const child = spawn(command, args, {
       cwd: options.cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -308,22 +255,34 @@ const runCommand = (
     });
     let stdout = "";
     let stderr = "";
+    const appendLimited = (current: string, chunk: string) => {
+      const next = current + chunk;
+      if (next.length <= COMMAND_OUTPUT_LIMIT) {
+        return next;
+      }
+      return next.slice(next.length - COMMAND_OUTPUT_LIMIT);
+    };
     const timer = setTimeout(() => {
+      settled = true;
       child.kill("SIGKILL");
       reject(new Error(`${command} timed out`));
     }, COMMAND_TIMEOUT_MS);
 
     child.stdout.on("data", (data) => {
-      stdout += data.toString();
+      stdout = appendLimited(stdout, data.toString());
     });
     child.stderr.on("data", (data) => {
-      stderr += data.toString();
+      stderr = appendLimited(stderr, data.toString());
     });
     child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       reject(error);
     });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       if (code === 0) {
         resolve({ stdout, stderr });
@@ -342,7 +301,10 @@ const isMissingCommandError = (error: unknown) => {
   const err = error as NodeJS.ErrnoException;
   if (err.code === "ENOENT") return true;
   const message = typeof err.message === "string" ? err.message : "";
-  return message.toLowerCase().includes("enoent") || message.toLowerCase().includes("not found");
+  return (
+    message.toLowerCase().includes("enoent") ||
+    message.toLowerCase().includes("not found")
+  );
 };
 
 const isMissingModuleError = (error: unknown) => {
@@ -404,7 +366,10 @@ type HeicDecodeImage = {
   height: number;
 };
 
-type HeicDecodeResult = HeicDecodeImage | HeicDecodeImage[] | { images: HeicDecodeImage[] };
+type HeicDecodeResult =
+  | HeicDecodeImage
+  | HeicDecodeImage[]
+  | { images: HeicDecodeImage[] };
 
 type HeicDecodeFn = (options: {
   buffer: Buffer | Uint8Array;
@@ -426,13 +391,19 @@ type ResvgInstance = {
 };
 
 type ResvgModule = {
-  Resvg: new (svg: string, options?: { fitTo?: { mode: "original" } }) => ResvgInstance;
+  Resvg: new (
+    svg: string,
+    options?: { fitTo?: { mode: "original" } },
+  ) => ResvgInstance;
 };
 
 type PdfJsDocument = {
   numPages: number;
   getPage: (pageNumber: number) => Promise<{
-    getViewport: (options: { scale: number }) => { width: number; height: number };
+    getViewport: (options: { scale: number }) => {
+      width: number;
+      height: number;
+    };
     render: (options: {
       canvasContext: CanvasRenderingContext2D;
       viewport: { width: number; height: number };
@@ -448,11 +419,17 @@ type PdfJsLoadingTask = {
 };
 
 type PdfJsModule = {
-  getDocument: (options: { data: Uint8Array | Buffer; disableWorker?: boolean }) => PdfJsLoadingTask;
+  getDocument: (options: {
+    data: Uint8Array | Buffer;
+    disableWorker?: boolean;
+  }) => PdfJsLoadingTask;
 };
 
 type CanvasModule = {
-  createCanvas: (width: number, height: number) => {
+  createCanvas: (
+    width: number,
+    height: number,
+  ) => {
     width: number;
     height: number;
     getContext: (contextId: "2d") => CanvasRenderingContext2D | null;
@@ -862,7 +839,9 @@ const getPdfjsModule = async (): Promise<PdfJsModule> => {
           return null;
         })();
         if (!resolved) {
-          throw new Error(`pdfjs getDocument export not found in ${specifier}.`);
+          throw new Error(
+            `pdfjs getDocument export not found in ${specifier}.`,
+          );
         }
         cachedPdfjs = resolved;
         return resolved;
@@ -874,7 +853,8 @@ const getPdfjsModule = async (): Promise<PdfJsModule> => {
       }
     }
 
-    const message = lastError instanceof Error ? lastError.message : "Unknown error.";
+    const message =
+      lastError instanceof Error ? lastError.message : "Unknown error.";
     throw new Error(
       `pdfjs-dist not available. Install pdfjs-dist or Poppler. ${message}`,
     );
@@ -979,7 +959,11 @@ const pickHeicImage = (result: HeicDecodeResult): HeicDecodeImage => {
     if (first) return first;
   } else if (result && typeof result === "object" && "images" in result) {
     const images = (result as { images?: HeicDecodeImage[] }).images;
-    if (Array.isArray(images) && images.length > 0 && isHeicDecodeImage(images[0])) {
+    if (
+      Array.isArray(images) &&
+      images.length > 0 &&
+      isHeicDecodeImage(images[0])
+    ) {
       return images[0];
     }
   } else if (isHeicDecodeImage(result)) {
@@ -989,26 +973,42 @@ const pickHeicImage = (result: HeicDecodeResult): HeicDecodeImage => {
 };
 
 const runHeicToJpeg = async (inputPath: string, outputPath: string) => {
-  const buffer = await readFile(inputPath);
+  let buffer: Buffer | null = await readFile(inputPath);
   const decode = await getHeicDecode();
-  const decoded = await decode({ buffer });
-  const image = pickHeicImage(decoded);
-  const jpeg = await getJpegModule();
-  const rawData =
-    image.data instanceof ArrayBuffer
-      ? new Uint8Array(image.data)
-      : image.data;
-  const data = Buffer.from(rawData);
-  const encoded = jpeg.encode(
-    { data, width: image.width, height: image.height },
-    90,
-  );
-  await writeFile(outputPath, encoded.data);
+  let decoded: HeicDecodeResult | null = await decode({ buffer });
+  buffer = null;
+  try {
+    const image = pickHeicImage(decoded);
+    const jpeg = await getJpegModule();
+    const rawData =
+      image.data instanceof ArrayBuffer
+        ? new Uint8Array(image.data)
+        : image.data;
+    let data: Buffer | null = Buffer.from(rawData);
+    try {
+      const encoded = jpeg.encode(
+        { data, width: image.width, height: image.height },
+        90,
+      );
+      await writeFile(outputPath, encoded.data);
+    } finally {
+      data = null;
+    }
+  } finally {
+    decoded = null;
+    maybeRunGarbageCollection();
+  }
 };
 
 const runSvgToPng = async (inputPath: string, outputPath: string) => {
   try {
-    await runCommand("rsvg-convert", ["-f", "png", "-o", outputPath, inputPath]);
+    await runCommand("rsvg-convert", [
+      "-f",
+      "png",
+      "-o",
+      outputPath,
+      inputPath,
+    ]);
     return;
   } catch (error) {
     if (!isMissingCommandError(error)) {
@@ -1017,14 +1017,23 @@ const runSvgToPng = async (inputPath: string, outputPath: string) => {
   }
 
   try {
-    const svgSource = await readFile(inputPath, "utf8");
+    let svgSource: string | null = await readFile(inputPath, "utf8");
     const { Resvg } = await getResvgModule();
-    const resvg = new Resvg(svgSource, { fitTo: { mode: "original" } });
-    const png = resvg.render().asPng();
-    await writeFile(outputPath, Buffer.from(png));
+    let png: Uint8Array | null = null;
+    try {
+      const resvg = new Resvg(svgSource, { fitTo: { mode: "original" } });
+      svgSource = null;
+      png = resvg.render().asPng();
+      await writeFile(outputPath, Buffer.from(png));
+    } finally {
+      svgSource = null;
+      png = null;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
-    throw new Error(`rsvg-convert not found and resvg fallback failed: ${message}`);
+    throw new Error(
+      `rsvg-convert not found and resvg fallback failed: ${message}`,
+    );
   }
 };
 
@@ -1046,7 +1055,9 @@ const runImageConvert = async (inputPath: string, outputPath: string) => {
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error.";
-      throw new Error(`ImageMagick not found and Jimp fallback failed: ${message}`);
+      throw new Error(
+        `ImageMagick not found and Jimp fallback failed: ${message}`,
+      );
     }
   }
 
@@ -1087,13 +1098,17 @@ const streamToFile = async (body: unknown, filePath: string) => {
     return;
   }
   if (
-    typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer ===
-    "function"
+    typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> })
+      .arrayBuffer === "function"
   ) {
-    const buffer = Buffer.from(
+    let buffer: Buffer | null = Buffer.from(
       await (body as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer(),
     );
-    await writeFile(filePath, buffer);
+    try {
+      await writeFile(filePath, buffer);
+    } finally {
+      buffer = null;
+    }
     return;
   }
   throw new Error("Unsupported S3 body type.");
@@ -1151,9 +1166,9 @@ const cleanOcrText = (text: string) => {
 
     if (isOcrNoiseLine(line)) {
       const previous = cleaned[cleaned.length - 1] ?? "";
-      const next = rawLines
-        .slice(index + 1)
-        .find((candidate) => candidate.length > 0) ?? "";
+      const next =
+        rawLines.slice(index + 1).find((candidate) => candidate.length > 0) ??
+        "";
       const surroundedByLongLines =
         previous.replace(/\s+/g, "").length >= 8 ||
         next.replace(/\s+/g, "").length >= 8;
@@ -1380,7 +1395,10 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
     }
   };
 
-  const runTextractCandidate = async (candidatePath: string, source: string) => {
+  const runTextractCandidate = async (
+    candidatePath: string,
+    source: string,
+  ) => {
     const bytes = await readFile(candidatePath);
     const result = await detectTextFromImageBytesDetailed(bytes);
     considerCandidate(result.text, source, result);
@@ -1399,8 +1417,8 @@ const runTesseractToText = async (inputPath: string, outputBase: string) => {
       );
       preprocessedPaths.push(...preprocessedImages.map((image) => image.path));
       handwritingVariantPath =
-        preprocessedImages.find((image) => image.kind === "handwriting")?.path ??
-        null;
+        preprocessedImages.find((image) => image.kind === "handwriting")
+          ?.path ?? null;
       for (const preprocessedImage of preprocessedImages) {
         await tryCandidate(preprocessedImage.path);
       }
@@ -1460,19 +1478,23 @@ const convertWithLibreOffice = async (
   outputDir: string,
 ) => {
   const libreOffice = await getLibreOfficeCommand();
-  await runCommand(libreOffice.command, [
-    ...libreOffice.baseArgs,
-    "--nologo",
-    "--nolockcheck",
-    "--norestore",
-    "--invisible",
-    "--headless",
-    "--convert-to",
-    outputFormat,
-    "--outdir",
-    outputDir,
-    inputPath,
-  ], { windowsHide: true });
+  await runCommand(
+    libreOffice.command,
+    [
+      ...libreOffice.baseArgs,
+      "--nologo",
+      "--nolockcheck",
+      "--norestore",
+      "--invisible",
+      "--headless",
+      "--convert-to",
+      outputFormat,
+      "--outdir",
+      outputDir,
+      inputPath,
+    ],
+    { windowsHide: true },
+  );
   const base = path.basename(inputPath, path.extname(inputPath));
   return path.join(outputDir, `${base}.${outputFormat}`);
 };
@@ -1558,9 +1580,7 @@ const zipDirectory = async (zipPath: string, dirPath: string) => {
     const entries = await readdir(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       const entryPath = path.join(currentDir, entry.name);
-      const relPath = path
-        .relative(base, entryPath)
-        .replace(/\\/g, "/");
+      const relPath = path.relative(base, entryPath).replace(/\\/g, "/");
       if (entry.isDirectory()) {
         await walk(entryPath);
       } else if (entry.isFile()) {
@@ -1622,26 +1642,33 @@ const runPdfToImages = async (
 
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
         const page = await pdf.getPage(pageNumber);
-        const viewport = page.getViewport({ scale });
-        const canvas = createCanvas(viewport.width, viewport.height);
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          throw new Error("Unable to create 2D canvas context.");
-        }
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        const outputPath = path.join(outputDir, `${base}-${pageNumber}.jpg`);
-        let buffer: Buffer | null = canvas.toBuffer("image/jpeg", {
-          quality: 0.92,
-        });
+        let canvas: ReturnType<typeof createCanvas> | null = null;
         try {
-          await writeFile(outputPath, buffer);
+          const viewport = page.getViewport({ scale });
+          canvas = createCanvas(viewport.width, viewport.height);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            throw new Error("Unable to create 2D canvas context.");
+          }
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const outputPath = path.join(outputDir, `${base}-${pageNumber}.jpg`);
+          let buffer: Buffer | null = canvas.toBuffer("image/jpeg", {
+            quality: 0.92,
+          });
+          try {
+            await writeFile(outputPath, buffer);
+          } finally {
+            buffer = null;
+          }
+          results.push(outputPath);
         } finally {
-          buffer = null;
           page.cleanup?.();
-          canvas.width = 0;
-          canvas.height = 0;
+          if (canvas) {
+            canvas.width = 0;
+            canvas.height = 0;
+          }
+          maybeRunGarbageCollection();
         }
-        results.push(outputPath);
       }
 
       return results;
@@ -1657,9 +1684,7 @@ const runPdfToImages = async (
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error.";
-    throw new Error(
-      `pdftoppm not found and pdfjs fallback failed: ${message}`,
-    );
+    throw new Error(`pdftoppm not found and pdfjs fallback failed: ${message}`);
   }
 };
 
@@ -1721,7 +1746,11 @@ const runCsvToJson = async (inputPath: string, outputPath: string) => {
 };
 
 const runQrScan = async (inputPath: string) => {
-  const { stdout } = await runCommand("zbarimg", ["--raw", "--quiet", inputPath]);
+  const { stdout } = await runCommand("zbarimg", [
+    "--raw",
+    "--quiet",
+    inputPath,
+  ]);
   return stdout.trim();
 };
 
@@ -1740,20 +1769,27 @@ const isImg2PdfMissing = (error: unknown) => {
   );
 };
 
-const runImageToPdfWithPdfLib = async (inputPath: string, outputPath: string) => {
+const runImageToPdfWithPdfLib = async (
+  inputPath: string,
+  outputPath: string,
+) => {
   const ext = path.extname(inputPath).slice(1).toLowerCase();
   let bytes: Buffer | null = await readFile(inputPath);
   const pdfDoc = await PDFDocument.create();
   let image;
 
-  if (ext === "jpg" || ext === "jpeg") {
-    image = await pdfDoc.embedJpg(bytes);
-  } else if (ext === "png") {
-    image = await pdfDoc.embedPng(bytes);
-  } else {
-    throw new Error(
-      `Image to PDF fallback supports JPG or PNG only (received .${ext || "unknown"}).`,
-    );
+  try {
+    if (ext === "jpg" || ext === "jpeg") {
+      image = await pdfDoc.embedJpg(bytes);
+    } else if (ext === "png") {
+      image = await pdfDoc.embedPng(bytes);
+    } else {
+      throw new Error(
+        `Image to PDF fallback supports JPG or PNG only (received .${ext || "unknown"}).`,
+      );
+    }
+  } finally {
+    bytes = null;
   }
 
   const page = pdfDoc.addPage([image.width, image.height]);
@@ -1764,7 +1800,6 @@ const runImageToPdfWithPdfLib = async (inputPath: string, outputPath: string) =>
     height: image.height,
   });
 
-  bytes = null;
   let pdfBytes: Uint8Array | null = await pdfDoc.save();
   try {
     await writeFile(outputPath, pdfBytes);
@@ -1786,7 +1821,10 @@ const runImageToPdf = async (inputPath: string, outputPath: string) => {
   try {
     await runImageToPdfWithPdfLib(inputPath, outputPath);
   } catch (fallbackError) {
-    if (fallbackError instanceof Error && fallbackError.message.includes("fallback supports")) {
+    if (
+      fallbackError instanceof Error &&
+      fallbackError.message.includes("fallback supports")
+    ) {
       throw new Error(
         `${fallbackError.message} Install Python + img2pdf for TIFF or other formats.`,
       );
@@ -1838,7 +1876,7 @@ const enforceDocumentPageLimit = async (pdfPath: string, fileName: string) => {
   return pageCount;
 };
 
-const processJob = async (
+export const processJob = async (
   jobId: string,
   options: { inputConcurrency: number },
 ) => {
@@ -1955,12 +1993,16 @@ const processJob = async (
 
       if (normalized.startsWith("#x")) {
         const codePoint = Number.parseInt(normalized.slice(2), 16);
-        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+        return Number.isFinite(codePoint)
+          ? String.fromCodePoint(codePoint)
+          : match;
       }
 
       if (normalized.startsWith("#")) {
         const codePoint = Number.parseInt(normalized.slice(1), 10);
-        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+        return Number.isFinite(codePoint)
+          ? String.fromCodePoint(codePoint)
+          : match;
       }
 
       return match;
@@ -2153,20 +2195,24 @@ const processJob = async (
       throw new Error("No pages rendered.");
     }
 
-    const convertedPages = await Promise.all(
-      images.map(async (imagePath, pageIndex) => {
-        const outputPath = path.join(
-          pageDir,
-          `${sanitizeFileName(input.baseName)}-page-${pageIndex + 1}.${format}`,
-        );
-        if (format === "jpeg") {
-          await copyFile(imagePath, outputPath);
-          return outputPath;
-        }
+    const convertedPages: string[] = [];
+    for (let pageIndex = 0; pageIndex < images.length; pageIndex += 1) {
+      const imagePath = images[pageIndex];
+      if (!imagePath) {
+        continue;
+      }
+      const outputPath = path.join(
+        pageDir,
+        `${sanitizeFileName(input.baseName)}-page-${pageIndex + 1}.${format}`,
+      );
+      if (format === "jpeg") {
+        await copyFile(imagePath, outputPath);
+      } else {
         await runImageConvert(imagePath, outputPath);
-        return outputPath;
-      }),
-    );
+      }
+      convertedPages.push(outputPath);
+      maybeRunGarbageCollection();
+    }
 
     if (convertedPages.length === 1) {
       const single = convertedPages[0];
@@ -2188,8 +2234,9 @@ const processJob = async (
   const handlePdfSplit = async (
     input: JobInput & { baseName: string; localPath: string },
   ) => {
-    const bytes = await readFile(input.localPath);
+    let bytes: Buffer | null = await readFile(input.localPath);
     const pdfDoc = await PDFDocument.load(bytes);
+    bytes = null;
     const pageCount = pdfDoc.getPageCount();
     if (pageCount > MAX_SPLIT_PDF_PAGES) {
       throw new Error(
@@ -2215,8 +2262,12 @@ const processJob = async (
         outputDir,
         `${sanitizeFileName(input.baseName)}.pdf`,
       );
-      const pdfBytes = await singleDoc.save();
-      await writeFile(outputPath, pdfBytes);
+      let pdfBytes: Uint8Array | null = await singleDoc.save();
+      try {
+        await writeFile(outputPath, pdfBytes);
+      } finally {
+        pdfBytes = null;
+      }
       await addOutput(outputPath, buildOutputName(input.baseName, "pdf"));
       return;
     }
@@ -2249,9 +2300,14 @@ const processJob = async (
         pageDir,
         `${sanitizeFileName(input.baseName)}-pages-${range.start}-to-${range.end}.pdf`,
       );
-      const pdfBytes = await splitDoc.save();
-      await writeFile(outputPath, pdfBytes);
+      let pdfBytes: Uint8Array | null = await splitDoc.save();
+      try {
+        await writeFile(outputPath, pdfBytes);
+      } finally {
+        pdfBytes = null;
+      }
       pageFiles.push(outputPath);
+      maybeRunGarbageCollection();
     }
 
     if (pageFiles.length === 0) {
@@ -2357,10 +2413,7 @@ const processJob = async (
   };
 
   const escapeXmlAttribute = (value: string) =>
-    value
-      .replace(/&/g, "&amp;")
-      .replace(/"/g, "&quot;")
-      .replace(/</g, "&lt;");
+    value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
   const prepareSvgEmbedAsset = async (
     input: JobInput & { baseName: string; localPath: string },
@@ -2381,10 +2434,12 @@ const processJob = async (
     const jimp = await getJimpModule();
     const image = await jimp.read(assetPath);
     const mimeType = getContentType(assetPath);
-    const data = await readFile(assetPath);
+    let data: Buffer | null = await readFile(assetPath);
+    const dataUrl = `data:${mimeType};base64,${data.toString("base64")}`;
+    data = null;
 
     return {
-      dataUrl: `data:${mimeType};base64,${data.toString("base64")}`,
+      dataUrl,
       width: image.getWidth(),
       height: image.getHeight(),
     };
@@ -2444,7 +2499,11 @@ const processJob = async (
       sourcePath = await prepareConvertedImage(input, "pdf", "jpg");
     } else if (inputExt === "svg") {
       sourcePath = await rasterizeSvgInput(input);
-    } else if (inputExt !== "jpg" && inputExt !== "jpeg" && inputExt !== "png") {
+    } else if (
+      inputExt !== "jpg" &&
+      inputExt !== "jpeg" &&
+      inputExt !== "png"
+    ) {
       sourcePath = await prepareConvertedImage(input, "pdf", "png");
     }
 
@@ -2561,7 +2620,10 @@ const processJob = async (
                 outputDir,
               );
               await enforceDocumentPageLimit(outputPath, input.filename);
-              await addOutput(outputPath, buildOutputName(input.baseName, "pdf"));
+              await addOutput(
+                outputPath,
+                buildOutputName(input.baseName, "pdf"),
+              );
               break;
             }
             case "pdf-to-jpg":
@@ -2675,186 +2737,19 @@ const processJob = async (
 
     await updateJobRecord(jobId, { status: "completed", outputs });
   } finally {
+    preparedInputs.length = 0;
+    outputs.length = 0;
     await rm(workDir, { recursive: true, force: true });
     maybeRunGarbageCollection();
   }
 };
 
-const processCleanupJob = async (jobId: string) => {
+export const processCleanupJob = async (jobId: string) => {
   await deleteS3Prefix({ prefix: `temp/${jobId}/` });
 };
 
-type WorkerKind = "heavy" | "light" | "cleanup";
-
-type WorkerQueueConfig = {
-  kind: WorkerKind;
-  queueName: string;
-  concurrency: number;
-  inputConcurrency?: number;
-};
-
-const queueConfigs: WorkerQueueConfig[] = [
-  {
-    kind: "heavy",
-    queueName: HEAVY_QUEUE_NAME,
-    concurrency: HEAVY_WORKER_CONCURRENCY,
-    inputConcurrency: HEAVY_WORKER_INPUT_CONCURRENCY,
-  },
-  {
-    kind: "light",
-    queueName: LIGHT_QUEUE_NAME,
-    concurrency: LIGHT_WORKER_CONCURRENCY,
-    inputConcurrency: LIGHT_WORKER_INPUT_CONCURRENCY,
-  },
-  {
-    kind: "cleanup",
-    queueName: CLEANUP_QUEUE_NAME,
-    concurrency: CLEANUP_WORKER_CONCURRENCY,
-  },
-];
-
-const adminConnection = getRedisConnection();
-let processedJobCount = 0;
-
-const recycleWorkerIfNeeded = () => {
-  if (!WORKER_MAX_JOBS || shuttingDown) {
-    return;
-  }
-
-  processedJobCount += 1;
-  if (processedJobCount < WORKER_MAX_JOBS) {
-    return;
-  }
-
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   console.log(
-    `${workerLogPrefix} processed ${processedJobCount} jobs and will restart to keep memory fresh`,
+    `${workerLogPrefix} standalone queue worker is no longer used. Converter jobs are processed by the web process with p-queue.`,
   );
-  void shutdown()
-    .then(() => {
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error(`${workerLogPrefix} failed to recycle worker cleanly`, error);
-      process.exit(1);
-    });
-};
-
-console.log(
-  `${workerLogPrefix} starting converter workers heavy("${HEAVY_QUEUE_NAME}")=${HEAVY_WORKER_CONCURRENCY}/${HEAVY_WORKER_INPUT_CONCURRENCY}, light("${LIGHT_QUEUE_NAME}")=${LIGHT_WORKER_CONCURRENCY}/${LIGHT_WORKER_INPUT_CONCURRENCY}, cleanup("${CLEANUP_QUEUE_NAME}")=${CLEANUP_WORKER_CONCURRENCY}, max jobs ${WORKER_MAX_JOBS || "unlimited"}, and keepalive ${WORKER_KEEPALIVE_MS}ms (redis=${describeRedisTarget()}, bucket=${bucket}, region=${process.env.AWS_REGION?.trim() || "unknown"})`,
-);
-
-const createConvertProcessor =
-  (inputConcurrency: number) => async (bullJob: { data: { jobId?: string } }) => {
-    const jobId = (bullJob.data as { jobId?: string }).jobId;
-    if (!jobId) {
-      throw new Error("Missing jobId.");
-    }
-    try {
-      await processJob(jobId, { inputConcurrency });
-      await scheduleJobCleanup(jobId).catch((error) => {
-        console.error(
-          `${workerLogPrefix} failed to schedule cleanup for job ${jobId}`,
-          error,
-        );
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Job failed.";
-      await updateJobRecord(jobId, { status: "failed", error: message });
-      await scheduleJobCleanup(jobId).catch((scheduleError) => {
-        console.error(
-          `${workerLogPrefix} failed to schedule cleanup for failed job ${jobId}`,
-          scheduleError,
-        );
-      });
-      throw error;
-    }
-  };
-
-const cleanupProcessor = async (bullJob: { data: { jobId?: string } }) => {
-  const jobId = (bullJob.data as { jobId?: string }).jobId;
-  if (!jobId) {
-    throw new Error("Missing jobId.");
-  }
-  await processCleanupJob(jobId);
-};
-
-const workers = queueConfigs.map((config) => {
-  const connection = getRedisConnection();
-  const prefix = `${workerLogPrefix}:${config.kind}`;
-  const processor =
-    config.kind === "cleanup"
-      ? cleanupProcessor
-      : createConvertProcessor(config.inputConcurrency ?? 1);
-
-  const worker = new Worker(config.queueName, processor, {
-    connection: connection as unknown as ConnectionOptions,
-    concurrency: config.concurrency,
-  });
-
-  worker.on("ready", () => {
-    console.log(`${prefix} ready and waiting for jobs on "${config.queueName}"`);
-  });
-
-  worker.on("active", (bullJob) => {
-    const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
-    console.log(`${prefix} claimed job ${jobId}`);
-  });
-
-  worker.on("completed", (bullJob) => {
-    const jobId = (bullJob.data as { jobId?: string }).jobId ?? bullJob.id;
-    console.log(`${prefix} completed job ${jobId}`);
-    if (config.kind !== "cleanup") {
-      recycleWorkerIfNeeded();
-    }
-  });
-
-  worker.on("failed", async (bullJob, error) => {
-    const jobId = (bullJob?.data as { jobId?: string })?.jobId;
-    console.error(
-      `${prefix} failed job ${jobId ?? bullJob?.id ?? "unknown"}`,
-      error,
-    );
-    if (jobId && config.kind !== "cleanup") {
-      await updateJobRecord(jobId, {
-        status: "failed",
-        error: error instanceof Error ? error.message : "Job failed.",
-      });
-    }
-    if (config.kind !== "cleanup") {
-      recycleWorkerIfNeeded();
-    }
-  });
-
-  worker.on("error", (error) => {
-    console.error(`${prefix} worker error`, error);
-  });
-
-  worker.on("stalled", (jobId) => {
-    console.warn(`${prefix} stalled job ${jobId}`);
-  });
-
-  return { worker, connection };
-});
-
-const keepAliveTimer = setInterval(() => {
-  adminConnection.ping().catch((error) => {
-    console.error(`${workerLogPrefix} redis keepalive ping failed`, error);
-  });
-}, WORKER_KEEPALIVE_MS);
-
-keepAliveTimer.unref();
-
-let shuttingDown = false;
-
-const shutdown = async () => {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  clearInterval(keepAliveTimer);
-  console.log(`${workerLogPrefix} shutting down`);
-  await Promise.allSettled(workers.map(({ worker }) => worker.close()));
-  await Promise.allSettled(workers.map(({ connection }) => connection.quit()));
-  await adminConnection.quit();
-};
-
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+}

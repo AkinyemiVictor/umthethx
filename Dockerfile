@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Railway worker image for the conversion queue.
+# Legacy standalone converter image. The active Railway web image now runs p-queue jobs in-process.
 
 FROM node:20-bookworm-slim AS build
 RUN corepack enable

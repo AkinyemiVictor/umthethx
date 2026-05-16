@@ -1,18 +1,7 @@
-import { Queue, type ConnectionOptions } from "bullmq";
-import IORedis, { type RedisOptions } from "ioredis";
+import PQueue from "p-queue";
 import { getConverterBySlug } from "./converters";
-
-type EnvKey =
-  | "REDIS_URL"
-  | "REDIS_HOST"
-  | "REDIS_PORT"
-  | "REDIS_PASSWORD"
-  | "REDIS_USERNAME"
-  | "REDIS_TLS"
-  | "UPSTASH_REDIS_REST_URL"
-  | "UPSTASH_REDIS_REST_TOKEN";
-
-const readEnv = (key: EnvKey) => process.env[key]?.trim();
+import { updateJobRecord } from "./job-store";
+import { deleteS3Prefix } from "./s3";
 
 export const HEAVY_QUEUE_NAME = "converter-jobs-heavy";
 export const LIGHT_QUEUE_NAME = "converter-jobs-light";
@@ -20,6 +9,26 @@ export const CLEANUP_QUEUE_NAME = "converter-jobs-cleanup";
 export const DEFAULT_JOB_RETENTION_MS = 15 * 60 * 1000;
 
 export type ConvertQueueTier = "heavy" | "light";
+
+type QueueJobData = {
+  jobId?: string;
+};
+
+type QueueAddOptions = {
+  delay?: number;
+  jobId?: string;
+  removeOnComplete?: number;
+  removeOnFail?: number;
+};
+
+type LocalQueue = {
+  add: (
+    _name: string,
+    data: QueueJobData,
+    options?: QueueAddOptions,
+  ) => Promise<void>;
+  close: () => Promise<void>;
+};
 
 const HEAVY_ENGINE_HINTS = new Set([
   "tesseract",
@@ -37,9 +46,6 @@ const HEAVY_ENGINE_HINTS = new Set([
   "chrome-print",
 ]);
 
-const isTruthy = (value: string) =>
-  ["1", "true", "yes", "on"].includes(value.toLowerCase());
-
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isInteger(parsed) || parsed < 1) {
@@ -48,104 +54,132 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   return parsed;
 };
 
-const parseRedisPort = (value: string | undefined) => {
-  if (!value) return 6379;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error("REDIS_PORT must be a positive integer.");
-  }
-  return parsed;
-};
+const HEAVY_WORKER_CONCURRENCY = parsePositiveInteger(
+  process.env.HEAVY_WORKER_CONCURRENCY?.trim() ||
+    process.env.WORKER_CONCURRENCY?.trim(),
+  1,
+);
+const LIGHT_WORKER_CONCURRENCY = parsePositiveInteger(
+  process.env.LIGHT_WORKER_CONCURRENCY?.trim(),
+  4,
+);
+const CLEANUP_WORKER_CONCURRENCY = parsePositiveInteger(
+  process.env.CLEANUP_WORKER_CONCURRENCY?.trim(),
+  2,
+);
+const HEAVY_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
+  process.env.HEAVY_WORKER_INPUT_CONCURRENCY?.trim() ||
+    process.env.WORKER_INPUT_CONCURRENCY?.trim(),
+  1,
+);
+const LIGHT_WORKER_INPUT_CONCURRENCY = parsePositiveInteger(
+  process.env.LIGHT_WORKER_INPUT_CONCURRENCY?.trim(),
+  1,
+);
 
-const getUpstashHostFromRestUrl = () => {
-  const restUrl = readEnv("UPSTASH_REDIS_REST_URL");
-  if (!restUrl) return undefined;
+export const JOB_RETENTION_MS = parsePositiveInteger(
+  process.env.JOB_RETENTION_MS?.trim(),
+  DEFAULT_JOB_RETENTION_MS,
+);
+
+const queues: Record<string, PQueue> = {
+  [HEAVY_QUEUE_NAME]: new PQueue({ concurrency: HEAVY_WORKER_CONCURRENCY }),
+  [LIGHT_QUEUE_NAME]: new PQueue({ concurrency: LIGHT_WORKER_CONCURRENCY }),
+  [CLEANUP_QUEUE_NAME]: new PQueue({ concurrency: CLEANUP_WORKER_CONCURRENCY }),
+};
+let queueShutdownHandlersRegistered = false;
+
+const processConvertJob = async (jobId: string, inputConcurrency: number) => {
   try {
-    return new URL(restUrl).hostname;
-  } catch {
-    throw new Error("UPSTASH_REDIS_REST_URL must be a valid URL.");
+    const { processJob } = await import("../../worker/convert-worker");
+    await processJob(jobId, { inputConcurrency });
+    await scheduleJobCleanup(jobId).catch((error) => {
+      console.error(`failed to schedule cleanup for job ${jobId}`, error);
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Job failed.";
+    await updateJobRecord(jobId, { status: "failed", error: message }).catch(
+      () => undefined,
+    );
+    await scheduleJobCleanup(jobId).catch((scheduleError) => {
+      console.error(
+        `failed to schedule cleanup for failed job ${jobId}`,
+        scheduleError,
+      );
+    });
+    throw error;
   }
 };
 
-const shouldUseTls = (host?: string, url?: string) => {
-  const explicitTls = readEnv("REDIS_TLS");
-  if (explicitTls) {
-    return isTruthy(explicitTls);
+const runQueueJob = async (queueName: string, data: QueueJobData) => {
+  const jobId = data.jobId;
+  if (!jobId) {
+    throw new Error("Missing jobId.");
   }
-  if (url) {
-    return url.startsWith("rediss://");
+
+  if (queueName === CLEANUP_QUEUE_NAME) {
+    await deleteS3Prefix({ prefix: `temp/${jobId}/` });
+    return;
   }
-  return host?.endsWith(".upstash.io") ?? false;
+
+  const inputConcurrency =
+    queueName === HEAVY_QUEUE_NAME
+      ? HEAVY_WORKER_INPUT_CONCURRENCY
+      : LIGHT_WORKER_INPUT_CONCURRENCY;
+  await processConvertJob(jobId, inputConcurrency);
 };
 
-const validateRedisUrl = (value: string) => {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(
-      "REDIS_URL must be a valid redis:// or rediss:// URL.",
-    );
+export const getQueue = (queueName: string): LocalQueue => {
+  const queue = queues[queueName];
+  if (!queue) {
+    throw new Error(`Unknown queue: ${queueName}`);
   }
 
-  if (parsed.protocol !== "redis:" && parsed.protocol !== "rediss:") {
-    throw new Error(
-      "REDIS_URL must start with redis:// or rediss://.",
-    );
-  }
-
-  if (!parsed.hostname) {
-    throw new Error("REDIS_URL must include a hostname.");
-  }
-
-  return parsed;
+  return {
+    add: async (_name, data, options) => {
+      const enqueue = () => {
+        queue
+          .add(() => runQueueJob(queueName, data))
+          .catch((error: unknown) => {
+            console.error(`local queue "${queueName}" job failed`, error);
+          });
+      };
+      if (options?.delay) {
+        const timer = setTimeout(enqueue, Math.max(options.delay, 0));
+        timer.unref?.();
+        return;
+      }
+      enqueue();
+    },
+    close: async () => undefined,
+  };
 };
 
-const buildRedisOptions = (useTls: boolean): RedisOptions => ({
-  maxRetriesPerRequest: null,
-  enableOfflineQueue: false,
-  connectTimeout: 10_000,
-  ...(useTls ? { tls: {} } : {}),
-});
-
-export const getRedisConnection = () => {
-  const redisUrl = readEnv("REDIS_URL");
-  if (redisUrl) {
-    validateRedisUrl(redisUrl);
-    return new IORedis(
-      redisUrl,
-      buildRedisOptions(shouldUseTls(undefined, redisUrl)),
-    );
+export const shutdownLocalQueues = async () => {
+  for (const queue of Object.values(queues)) {
+    queue.pause();
+    queue.clear();
   }
-
-  const host = readEnv("REDIS_HOST") ?? getUpstashHostFromRestUrl();
-  if (!host) {
-    throw new Error(
-      "Missing Redis config: set REDIS_URL or REDIS_HOST. Upstash users can also provide UPSTASH_REDIS_REST_URL.",
-    );
-  }
-
-  const password =
-    readEnv("REDIS_PASSWORD") ?? readEnv("UPSTASH_REDIS_REST_TOKEN");
-  if (!password && host.endsWith(".upstash.io")) {
-    throw new Error(
-      "Missing Redis config: set REDIS_PASSWORD or UPSTASH_REDIS_REST_TOKEN for Upstash.",
-    );
-  }
-
-  return new IORedis({
-    host,
-    port: parseRedisPort(readEnv("REDIS_PORT")),
-    username: readEnv("REDIS_USERNAME"),
-    password,
-    ...buildRedisOptions(shouldUseTls(host)),
-  });
+  await Promise.allSettled(
+    Object.values(queues).map((queue) => queue.onIdle()),
+  );
 };
 
-export const getQueue = (queueName: string) =>
-  new Queue(queueName, {
-    connection: getRedisConnection() as unknown as ConnectionOptions,
-  });
+const registerQueueShutdownHandlers = () => {
+  if (queueShutdownHandlersRegistered) return;
+  queueShutdownHandlersRegistered = true;
+
+  const shutdown = () => {
+    void shutdownLocalQueues().catch((error: unknown) => {
+      console.error("failed to shut down local queues", error);
+    });
+  };
+
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+};
+
+registerQueueShutdownHandlers();
 
 export const getQueueTierForConverterSlug = (
   converterSlug: string,
@@ -169,33 +203,10 @@ export const getConvertQueueName = (converterSlug: string) =>
     ? HEAVY_QUEUE_NAME
     : LIGHT_QUEUE_NAME;
 
-export const JOB_RETENTION_MS = parsePositiveInteger(
-  process.env.JOB_RETENTION_MS?.trim(),
-  DEFAULT_JOB_RETENTION_MS,
-);
-
 export const scheduleJobCleanup = async (
   jobId: string,
   delayMs = JOB_RETENTION_MS,
 ) => {
   const queue = getQueue(CLEANUP_QUEUE_NAME);
-  try {
-    await queue.add(
-      "cleanup",
-      { jobId },
-      {
-        jobId: `cleanup:${jobId}`,
-        delay: Math.max(delayMs, 0),
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 60_000,
-        },
-        removeOnComplete: 1000,
-        removeOnFail: 1000,
-      },
-    );
-  } finally {
-    await queue.close().catch(() => undefined);
-  }
+  await queue.add("cleanup", { jobId }, { delay: delayMs });
 };

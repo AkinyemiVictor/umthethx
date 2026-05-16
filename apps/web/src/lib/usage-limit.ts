@@ -1,4 +1,3 @@
-import { getRedisConnection } from "./queue";
 import { normalizeDeviceId, DEVICE_ID_HEADER } from "./device-id";
 
 export type UsageScope = "converter" | "ai-notemaker";
@@ -111,13 +110,48 @@ const usagePolicies: Record<UsageScope, UsagePolicy> = {
   },
 };
 
-let cachedRedis: ReturnType<typeof getRedisConnection> | null = null;
+type UsageCounter = {
+  value: number;
+  expiresAt: number | null;
+};
 
-const getUsageRedis = () => {
-  if (!cachedRedis) {
-    cachedRedis = getRedisConnection();
+const usageCounters = new Map<string, UsageCounter>();
+
+const pruneExpiredCounter = (key: string) => {
+  const entry = usageCounters.get(key);
+  if (entry?.expiresAt && entry.expiresAt <= Date.now()) {
+    usageCounters.delete(key);
+    return null;
   }
-  return cachedRedis;
+  return entry ?? null;
+};
+
+const getCounterValue = (key: string) => pruneExpiredCounter(key)?.value ?? 0;
+
+const getCounterTtl = (key: string) => {
+  const entry = pruneExpiredCounter(key);
+  if (!entry) return -2;
+  if (!entry.expiresAt) return -1;
+  return Math.max(Math.ceil((entry.expiresAt - Date.now()) / 1000), 0);
+};
+
+const incrementCounter = (key: string, amount: number) => {
+  const entry = pruneExpiredCounter(key);
+  const nextValue = (entry?.value ?? 0) + amount;
+  usageCounters.set(key, {
+    value: nextValue,
+    expiresAt: entry?.expiresAt ?? null,
+  });
+  return nextValue;
+};
+
+const expireCounter = (key: string, seconds: number) => {
+  const entry = pruneExpiredCounter(key);
+  if (!entry) return;
+  usageCounters.set(key, {
+    ...entry,
+    expiresAt: Date.now() + seconds * 1000,
+  });
 };
 
 const readHeader = (request: Request, header: string) =>
@@ -139,17 +173,14 @@ const getClientIp = (request: Request) => {
 const normalizeIpForKey = (value: string | null) =>
   value ? value.replace(/[^a-z0-9:.\-]/gi, "-").slice(0, 80) : null;
 
-const getCountLimitMessage = (
-  policy: UsagePolicy,
-) =>
+const getCountLimitMessage = (policy: UsagePolicy) =>
   `Free ${policy.label} limit reached for now.`;
 
 const getByteLimitMessage = (
   _entry: UsageTrackedKey,
   _policy: UsagePolicy,
   _retryAfterSeconds: number,
-) =>
-  "Free conversion limit reached for now.";
+) => "Free conversion limit reached for now.";
 
 const getTrackedKeys = (request: Request, scope: UsageScope) => {
   const policy = usagePolicies[scope];
@@ -223,8 +254,7 @@ const getByteTrackedKeys = (request: Request, scope: UsageScope) => {
 };
 
 const getRetryAfter = async (key: string, windowSeconds: number) => {
-  const redis = getUsageRedis();
-  const ttl = await redis.ttl(key);
+  const ttl = getCounterTtl(key);
   return ttl > 0 ? ttl : windowSeconds;
 };
 
@@ -232,10 +262,7 @@ const readUsageEntry = async (
   entry: UsageTrackedKey,
   windowSeconds: number,
 ): Promise<UsageStatusEntry> => {
-  const redis = getUsageRedis();
-  const raw = await redis.get(entry.key);
-  const parsed = Number.parseInt(raw ?? "0", 10);
-  const used = Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+  const used = getCounterValue(entry.key);
   const retryAfterSeconds =
     used > 0 ? await getRetryAfter(entry.key, windowSeconds) : 0;
 
@@ -338,7 +365,6 @@ export const peekUsageLimit = async (
   scope: UsageScope,
   options: UsageCheckOptions = {},
 ): Promise<UsageCheckResult> => {
-  const redis = getUsageRedis();
   const { keys, policy } = getTrackedKeys(request, scope);
   const requestedUnits =
     Number.isFinite(options.units) && (options.units ?? 0) > 0
@@ -346,13 +372,12 @@ export const peekUsageLimit = async (
       : 1;
 
   for (const entry of keys) {
-    const raw = await redis.get(entry.key);
-    const count = Number.parseInt(raw ?? "0", 10);
-    if (
-      Number.isInteger(count) &&
-      count + requestedUnits > entry.limit
-    ) {
-      const retryAfterSeconds = await getRetryAfter(entry.key, policy.windowSeconds);
+    const count = getCounterValue(entry.key);
+    if (Number.isInteger(count) && count + requestedUnits > entry.limit) {
+      const retryAfterSeconds = await getRetryAfter(
+        entry.key,
+        policy.windowSeconds,
+      );
       return {
         allowed: false,
         retryAfterSeconds,
@@ -365,8 +390,7 @@ export const peekUsageLimit = async (
     const byteTracked = getByteTrackedKeys(request, scope);
     if (byteTracked) {
       for (const entry of byteTracked.keys) {
-        const raw = await redis.get(entry.key);
-        const usedBytes = Number.parseInt(raw ?? "0", 10);
+        const usedBytes = getCounterValue(entry.key);
         if (
           Number.isInteger(usedBytes) &&
           usedBytes + options.bytes > entry.limit
@@ -402,7 +426,6 @@ export const consumeUsageLimit = async (
   scope: UsageScope,
   options: UsageCheckOptions = {},
 ): Promise<UsageCheckResult> => {
-  const redis = getUsageRedis();
   const { keys, policy } = getTrackedKeys(request, scope);
   const requestedUnits =
     Number.isFinite(options.units) && (options.units ?? 0) > 0
@@ -410,10 +433,10 @@ export const consumeUsageLimit = async (
       : 1;
 
   for (const entry of keys) {
-    const count = await redis.incrby(entry.key, requestedUnits);
-    let ttl = await redis.ttl(entry.key);
+    const count = incrementCounter(entry.key, requestedUnits);
+    let ttl = getCounterTtl(entry.key);
     if (count === requestedUnits || ttl < 0) {
-      await redis.expire(entry.key, policy.windowSeconds);
+      expireCounter(entry.key, policy.windowSeconds);
       ttl = policy.windowSeconds;
     }
 
@@ -431,11 +454,11 @@ export const consumeUsageLimit = async (
     if (byteTracked) {
       const incrementedByteKeys: string[] = [];
       for (const entry of byteTracked.keys) {
-        const nextBytes = await redis.incrby(entry.key, options.bytes);
+        const nextBytes = incrementCounter(entry.key, options.bytes);
         incrementedByteKeys.push(entry.key);
-        let ttl = await redis.ttl(entry.key);
+        let ttl = getCounterTtl(entry.key);
         if (nextBytes === options.bytes || ttl < 0) {
-          await redis.expire(
+          expireCounter(
             entry.key,
             byteTracked.policy.byteWindowSeconds ??
               DEFAULT_CONVERTER_BYTE_WINDOW_SECONDS,
@@ -447,12 +470,10 @@ export const consumeUsageLimit = async (
 
         if (nextBytes > entry.limit) {
           for (const countEntry of keys) {
-            await redis
-              .decrby(countEntry.key, requestedUnits)
-              .catch(() => undefined);
+            incrementCounter(countEntry.key, -requestedUnits);
           }
           for (const byteKey of incrementedByteKeys) {
-            await redis.decrby(byteKey, options.bytes).catch(() => undefined);
+            incrementCounter(byteKey, -options.bytes);
           }
 
           return {
@@ -460,15 +481,15 @@ export const consumeUsageLimit = async (
             retryAfterSeconds:
               ttl > 0
                 ? ttl
-                : byteTracked.policy.byteWindowSeconds ??
-                  DEFAULT_CONVERTER_BYTE_WINDOW_SECONDS,
+                : (byteTracked.policy.byteWindowSeconds ??
+                  DEFAULT_CONVERTER_BYTE_WINDOW_SECONDS),
             message: getByteLimitMessage(
               entry,
               byteTracked.policy,
               ttl > 0
                 ? ttl
-                : byteTracked.policy.byteWindowSeconds ??
-                  DEFAULT_CONVERTER_BYTE_WINDOW_SECONDS,
+                : (byteTracked.policy.byteWindowSeconds ??
+                    DEFAULT_CONVERTER_BYTE_WINDOW_SECONDS),
             ),
           };
         }

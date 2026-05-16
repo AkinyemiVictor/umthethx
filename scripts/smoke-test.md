@@ -1,30 +1,27 @@
 # Smoke Test (manual)
 
 Prereqs:
-- Redis running and configured with either `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`.
+
 - AWS credentials + S3 bucket set in `.env` or `.env.local`.
 - `pnpm install` completed.
 
-1) Start the web app:
+1. Start the web app:
    - PowerShell: `$env:NEXT_DISABLE_TURBOPACK="1"; pnpm --filter web dev`
 
-2) Start the worker in a second terminal:
-   - `pnpm --filter web run worker:convert`
-
-3) Upload JPG -> PDF:
+2. Upload JPG -> PDF:
    - Open `http://localhost:3000/`.
    - Select the JPG to PDF converter.
    - Upload a PNG or JPG file.
    - Click Convert and download the PDF.
-   - Confirm the worker logs show the job processing and completion.
+   - Confirm the job moves from queued to processing to completed.
 
-4) Upload PDF -> image ZIP:
+3. Upload PDF -> image ZIP:
    - Open `http://localhost:3000/convert/pdf-to-jpg`.
    - Upload a PDF file.
    - Click Convert and download the ZIP.
-   - Confirm the worker logs show the job processing and completion.
+   - Confirm the job moves from queued to processing to completed.
 
-5) Upload Image -> Text:
+4. Upload Image -> Text:
    - Open `http://localhost:3000/convert/image-to-text`.
    - Upload a JPG or PNG file.
    - Click Convert and download the TXT output.
